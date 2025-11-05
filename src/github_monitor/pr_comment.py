@@ -43,8 +43,9 @@ def create_pr_review_comment(
     file_path: str,
     line_number: int,
     comment_body: str,
+    event: str | None = None,
 ) -> dict[str, Any]:
-    """Create a review comment on a specific line of a file in a PR.
+    """Create a review comment on a specific line of a file in a PR, optionally submitting it as a review.
 
     Args:
         github_client: GitHub authentication token
@@ -53,9 +54,11 @@ def create_pr_review_comment(
         file_path: Path to the file relative to repository root
         line_number: Line number to comment on
         comment_body: The comment text
+        event: Optional review event to perform (APPROVE, REQUEST_CHANGES, COMMENT).
+               If None, creates a pending review without submitting.
 
     Returns:
-        Dictionary containing comment information including html_url
+        Dictionary containing review or thread information including html_url
 
     Raises:
         Exception: If the GitHub API returns an error
@@ -80,11 +83,12 @@ def create_pr_review_comment(
         )
         pull_request_id = pr_id_response["data"]["repository"]["pullRequest"]["id"]
 
-        # Create the review comment using GraphQL mutation
-        mutation = """
+        # Create a pending review with a comment thread
+        create_review_mutation = """
         mutation($input: AddPullRequestReviewThreadInput!) {
             addPullRequestReviewThread(input: $input) {
                 thread {
+                    id
                     comments(first: 1) {
                         nodes {
                             id
@@ -97,23 +101,90 @@ def create_pr_review_comment(
         }
         """
 
-        variables = {
+        create_variables = {
             "input": {
                 "pullRequestId": pull_request_id,
-                "body": comment_body,
                 "path": file_path,
+                "body": comment_body,
                 "line": line_number,
             }
         }
 
-        result = client.execute(mutation, variables)
-        comment = result["data"]["addPullRequestReviewThread"]["thread"]["comments"]["nodes"][0]
+        create_result = client.execute(create_review_mutation, create_variables)
+        thread = create_result["data"]["addPullRequestReviewThread"]["thread"]
+        comment = thread["comments"]["nodes"][0]
+
+        # If no event is specified, return the pending comment without submitting
+        if event is None:
+            comment_obj = {
+                "html_url": comment["url"],
+                "id": comment["id"],
+                "body": comment["body"],
+                "state": "PENDING",
+            }
+            logger.info("review_thread_created", url=comment_obj["html_url"])
+            return comment_obj
+
+        # If event is specified, get the pending review and submit it
+        get_pending_review_query = """
+        query($owner: String!, $repo: String!, $prNumber: Int!) {
+            repository(owner: $owner, name: $repo) {
+                pullRequest(number: $prNumber) {
+                    reviews(last: 1, states: [PENDING]) {
+                        nodes {
+                            id
+                        }
+                    }
+                }
+            }
+        }
+        """
+
+        pending_review_response = client.execute(
+            get_pending_review_query,
+            {"owner": owner, "repo": repo, "prNumber": pr_number},
+        )
+
+        reviews = pending_review_response["data"]["repository"]["pullRequest"]["reviews"]["nodes"]
+        if not reviews:
+            raise Exception("No pending review found after creating review thread")
+
+        review_id = reviews[0]["id"]
+
+        # Submit the review using submitPullRequestReview mutation
+        submit_mutation = """
+        mutation($input: SubmitPullRequestReviewInput!) {
+            submitPullRequestReview(input: $input) {
+                pullRequestReview {
+                    id
+                    url
+                    state
+                    body
+                }
+            }
+        }
+        """
+
+        submit_variables = {
+            "input": {
+                "pullRequestReviewId": review_id,
+                "event": event,
+            }
+        }
+
+        submit_result = client.execute(submit_mutation, submit_variables)
+        review = submit_result["data"]["submitPullRequestReview"]["pullRequestReview"]
 
         # Convert to expected format
-        comment_obj = {"html_url": comment["url"], "id": comment["id"], "body": comment["body"]}
+        review_obj = {
+            "html_url": review["url"],
+            "id": review["id"],
+            "state": review["state"],
+            "body": review.get("body", ""),
+        }
 
-        logger.info("comment_created", url=comment_obj["html_url"])
-        return comment_obj
+        logger.info("review_created", url=review_obj["html_url"], state=review_obj["state"])
+        return review_obj
 
     except Exception as e:
         logger.error("github_api_error", error=str(e))

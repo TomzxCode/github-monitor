@@ -1,6 +1,6 @@
 """Tests for the pr-comment CLI command."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -27,9 +27,14 @@ class TestPrCommentCommand:
             mock_create.assert_called_once_with(mock_token, "owner/repo", 123, "Looks good to me!")
 
     def test_pr_comment_create_line_comment(self):
-        """Test creating a line-specific PR comment."""
+        """Test creating a line-specific PR comment without submitting."""
         mock_token = "test_token"
-        mock_comment = {"html_url": "https://github.com/owner/repo/pull/123#discussion_r123456"}
+        mock_comment = {
+            "html_url": "https://github.com/owner/repo/pull/123#discussion_r123",
+            "id": "comment123",
+            "state": "PENDING",
+            "body": "This needs refactoring",
+        }
 
         with (
             patch("github_monitor.pr_comment.get_github_token", return_value=mock_token),
@@ -49,12 +54,18 @@ class TestPrCommentCommand:
                 "src/main.py",
                 42,
                 "This needs refactoring",
+                None,
             )
 
     def test_pr_comment_create_line_comment_with_commit(self):
-        """Test creating a line-specific PR comment."""
+        """Test creating a line-specific PR comment without submitting."""
         mock_token = "test_token"
-        mock_comment = {"html_url": "https://github.com/owner/repo/pull/123#discussion_r123456"}
+        mock_comment = {
+            "html_url": "https://github.com/owner/repo/pull/123#discussion_r123",
+            "id": "comment123",
+            "state": "PENDING",
+            "body": "Fix this",
+        }
 
         with (
             patch("github_monitor.pr_comment.get_github_token", return_value=mock_token),
@@ -74,6 +85,7 @@ class TestPrCommentCommand:
                 "src/main.py",
                 42,
                 "Fix this",
+                None,
             )
 
     def test_pr_comment_with_custom_token(self):
@@ -257,3 +269,167 @@ class TestPrCommentCommand:
             )
             # Should be called with None to trigger environment lookup
             mock_get_token.assert_called_once_with(None)
+
+    def test_pr_comment_submit_approve(self):
+        """Test submitting a review with approval."""
+        mock_token = "test_token"
+        mock_review = {
+            "html_url": "https://github.com/owner/repo/pull/123#pullrequestreview-123",
+            "id": "PRR_kwDOABCDEF4",
+            "state": "APPROVED",
+            "body": "",
+        }
+
+        with (
+            patch("github_monitor.pr_comment.get_github_token", return_value=mock_token),
+            patch("github_monitor.pr_comment.create_pr_review_comment", return_value=mock_review) as mock_create,
+        ):
+            pr_comment(
+                repo="owner/repo",
+                pr_number=123,
+                file="src/main.py",
+                line=42,
+                comment="LGTM",
+                submit="approve",
+            )
+            mock_create.assert_called_once_with(
+                mock_token,
+                "owner/repo",
+                123,
+                "src/main.py",
+                42,
+                "LGTM",
+                "APPROVE",
+            )
+
+    def test_pr_comment_submit_request_changes(self):
+        """Test submitting a review requesting changes."""
+        mock_token = "test_token"
+        mock_review = {
+            "html_url": "https://github.com/owner/repo/pull/123#pullrequestreview-123",
+            "id": "PRR_kwDOABCDEF4",
+            "state": "CHANGES_REQUESTED",
+            "body": "",
+        }
+
+        with (
+            patch("github_monitor.pr_comment.get_github_token", return_value=mock_token),
+            patch("github_monitor.pr_comment.create_pr_review_comment", return_value=mock_review) as mock_create,
+        ):
+            pr_comment(
+                repo="owner/repo",
+                pr_number=123,
+                file="src/main.py",
+                line=42,
+                comment="Please fix",
+                submit="request_changes",
+            )
+            mock_create.assert_called_once_with(
+                mock_token,
+                "owner/repo",
+                123,
+                "src/main.py",
+                42,
+                "Please fix",
+                "REQUEST_CHANGES",
+            )
+
+    def test_pr_comment_submit_comment(self):
+        """Test submitting a review as comment."""
+        mock_token = "test_token"
+        mock_review = {
+            "html_url": "https://github.com/owner/repo/pull/123#pullrequestreview-123",
+            "id": "PRR_kwDOABCDEF4",
+            "state": "COMMENTED",
+            "body": "",
+        }
+
+        with (
+            patch("github_monitor.pr_comment.get_github_token", return_value=mock_token),
+            patch("github_monitor.pr_comment.create_pr_review_comment", return_value=mock_review) as mock_create,
+        ):
+            pr_comment(
+                repo="owner/repo",
+                pr_number=123,
+                file="src/main.py",
+                line=42,
+                comment="Note",
+                submit="comment",
+            )
+            mock_create.assert_called_once_with(
+                mock_token,
+                "owner/repo",
+                123,
+                "src/main.py",
+                42,
+                "Note",
+                "COMMENT",
+            )
+
+    def test_pr_comment_submit_without_file_line(self):
+        """Test that submit requires file and line."""
+        mock_token = "test_token"
+
+        with (
+            patch("github_monitor.pr_comment.get_github_token", return_value=mock_token),
+            pytest.raises(SystemExit) as exc_info,
+        ):
+            pr_comment(
+                repo="owner/repo",
+                pr_number=123,
+                comment="LGTM",
+                submit="approve",
+            )
+
+        assert exc_info.value.code == 1
+
+    def test_pr_comment_submit_invalid_event(self):
+        """Test that submit rejects invalid event types."""
+        mock_token = "test_token"
+
+        with (
+            patch("github_monitor.pr_comment.get_github_token", return_value=mock_token),
+            pytest.raises(SystemExit) as exc_info,
+        ):
+            pr_comment(
+                repo="owner/repo",
+                pr_number=123,
+                file="src/main.py",
+                line=42,
+                comment="Test",
+                submit="invalid_event",
+            )
+
+        assert exc_info.value.code == 1
+
+    def test_pr_comment_submit_case_insensitive(self):
+        """Test that submit accepts case-insensitive event types."""
+        mock_token = "test_token"
+        mock_review = {
+            "html_url": "https://github.com/owner/repo/pull/123#pullrequestreview-123",
+            "id": "PRR_kwDOABCDEF4",
+            "state": "APPROVED",
+            "body": "",
+        }
+
+        with (
+            patch("github_monitor.pr_comment.get_github_token", return_value=mock_token),
+            patch("github_monitor.pr_comment.create_pr_review_comment", return_value=mock_review) as mock_create,
+        ):
+            pr_comment(
+                repo="owner/repo",
+                pr_number=123,
+                file="src/main.py",
+                line=42,
+                comment="LGTM",
+                submit="APPROVE",  # uppercase
+            )
+            mock_create.assert_called_once_with(
+                mock_token,
+                "owner/repo",
+                123,
+                "src/main.py",
+                42,
+                "LGTM",
+                "APPROVE",
+            )

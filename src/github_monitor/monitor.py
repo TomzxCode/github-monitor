@@ -25,19 +25,18 @@ Events published:
 """
 
 import json
-import os
 import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 import requests
 from dotenv import load_dotenv
 from nats.aio.client import Client as NATS
 from nats.js.api import DiscardPolicy, RetentionPolicy, StreamConfig
 
-from github_monitor.github_client import GitHubGraphQLClient, get_github_client
+from github_monitor.github_client import get_github_client
 
 
 # Load environment variables from .env file
