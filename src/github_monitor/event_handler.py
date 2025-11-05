@@ -449,7 +449,7 @@ async def message_handler(msg, handler: EventHandler, auto_confirm: bool = True)
 
         # Prompt user to continue if auto_confirm is False
         if not auto_confirm:
-            response = input("\nPress Enter to process this event (or Ctrl+C to exit)... ")
+            input("\nPress Enter to process this event (or Ctrl+C to exit)... ")
 
         if subject == "github.issue.new":
             await handler.handle_new_issue(data)

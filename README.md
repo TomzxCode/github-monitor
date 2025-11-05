@@ -153,8 +153,7 @@ The tool organizes data in the following structure:
             ├── .active              # Marks issue/PR as actively tracked
             ├── .type                # "issue" or "pr"
             ├── .last_checked        # Last monitoring timestamp
-            ├── .last_issue_comment_check  # Last issue comment check
-            └── .last_pr_comment_check     # Last PR comment check
+            └── .last_comment_check  # Last comment check (for both issues and PRs)
 ```
 
 ## Event Types

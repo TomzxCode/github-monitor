@@ -257,7 +257,7 @@ def _parse_issue_node(issue: dict) -> dict:
         "closed_at": issue["closedAt"],
         "author": issue["author"]["login"] if issue["author"] else "ghost",
         "assignees": [a["login"] for a in issue["assignees"]["nodes"]],
-        "labels": [l["name"] for l in issue["labels"]["nodes"]],
+        "labels": [label["name"] for label in issue["labels"]["nodes"]],
     }
 
 
@@ -276,7 +276,7 @@ def _parse_pr_node(pr: dict) -> dict:
         "merged_at": pr["mergedAt"],
         "author": pr["author"]["login"] if pr["author"] else "ghost",
         "assignees": [a["login"] for a in pr["assignees"]["nodes"]],
-        "labels": [l["name"] for l in pr["labels"]["nodes"]],
+        "labels": [label["name"] for label in pr["labels"]["nodes"]],
         "is_draft": pr["isDraft"],
         "mergeable": pr["mergeable"],
         "review_decision": pr["reviewDecision"],
@@ -417,9 +417,7 @@ def get_tracked_repositories(base_path: Path) -> list[str]:
     return repositories
 
 
-def get_last_comment_check(
-    base_path: Path, repository: str, issue_number: str, check_type: str = "issue"
-) -> Optional[str]:
+def get_last_comment_check(base_path: Path, repository: str, issue_number: str) -> Optional[str]:
     """
     Get the timestamp of the last comment check for an issue or PR.
 
@@ -427,13 +425,12 @@ def get_last_comment_check(
         base_path: Base path for issue directories
         repository: Repository in "owner/repo" format
         issue_number: Issue or PR number
-        check_type: Type of check ("issue" or "pr")
 
     Returns:
         ISO8601 timestamp string, or None if never checked
     """
     issue_dir = base_path / repository / issue_number
-    timestamp_file = issue_dir / f".last_{check_type}_comment_check"
+    timestamp_file = issue_dir / ".last_comment_check"
 
     if timestamp_file.exists():
         try:
@@ -450,7 +447,6 @@ def save_last_comment_check(
     repository: str,
     issue_number: str,
     timestamp: str,
-    check_type: str = "issue",
 ) -> None:
     """
     Save the timestamp of the last comment check for an issue or PR.
@@ -460,10 +456,9 @@ def save_last_comment_check(
         repository: Repository in "owner/repo" format
         issue_number: Issue or PR number
         timestamp: ISO8601 timestamp string
-        check_type: Type of check ("issue" or "pr")
     """
     issue_dir = base_path / repository / issue_number
-    timestamp_file = issue_dir / f".last_{check_type}_comment_check"
+    timestamp_file = issue_dir / ".last_comment_check"
 
     try:
         timestamp_file.write_text(timestamp)
@@ -823,7 +818,7 @@ async def ensure_jetstream_stream(nc: NATS, stream_name: str = "GITHUB_EVENTS"):
         raise
 
 
-def get_repository_last_comment_check(base_path: Path, repository: str, check_type: str = "issue") -> Optional[str]:
+def get_repository_last_comment_check(base_path: Path, repository: str) -> Optional[str]:
     """
     Get the earliest last comment check timestamp for all issues/PRs in a repository.
     This allows us to fetch all comments since the earliest check with a single query.
@@ -831,7 +826,6 @@ def get_repository_last_comment_check(base_path: Path, repository: str, check_ty
     Args:
         base_path: Base path for issue directories
         repository: Repository in "owner/repo" format
-        check_type: Type of check ("issue" or "pr")
 
     Returns:
         ISO8601 timestamp string of the earliest last check, or None if never checked
@@ -846,7 +840,7 @@ def get_repository_last_comment_check(base_path: Path, repository: str, check_ty
         if not issue_dir.is_dir():
             continue
 
-        timestamp_file = issue_dir / f".last_{check_type}_comment_check"
+        timestamp_file = issue_dir / ".last_comment_check"
         if timestamp_file.exists():
             try:
                 timestamp = timestamp_file.read_text().strip()
@@ -1170,7 +1164,7 @@ async def monitor_issue_comments(
     # Process each repository
     for repository, issue_numbers in issues_by_repo.items():
         # Get the earliest last check timestamp for this repository
-        last_check = get_repository_last_comment_check(base_path, repository, "issue")
+        last_check = get_repository_last_comment_check(base_path, repository)
 
         if last_check:
             print(f"Checking issue comments for {repository} since {last_check}...")
@@ -1190,7 +1184,7 @@ async def monitor_issue_comments(
 
                 for comment in comments:
                     # Check if this comment is newer than the last check for this specific issue
-                    issue_last_check = get_last_comment_check(base_path, repository, issue_number, "issue")
+                    issue_last_check = get_last_comment_check(base_path, repository, issue_number)
                     if issue_last_check and comment["updated_at"] <= issue_last_check:
                         continue
 
@@ -1201,8 +1195,10 @@ async def monitor_issue_comments(
                     }
 
                     if dry_run:
+                        author = comment["author"]
                         print(
-                            f"    [DRY RUN] Would publish github.issue.comment.new event for comment by {comment['author']} on #{issue_number}"
+                            f"    [DRY RUN] Would publish github.issue.comment.new event "
+                            f"for comment by {author} on #{issue_number}"
                         )
                     else:
                         await publish_event(js, "github.issue.comment.new", event_data)
@@ -1213,7 +1209,7 @@ async def monitor_issue_comments(
         # Update the last check timestamp for each issue
         if not dry_run:
             for issue_number in issue_numbers:
-                save_last_comment_check(base_path, repository, issue_number, current_time, "issue")
+                save_last_comment_check(base_path, repository, issue_number, current_time)
 
     return new_comments_count
 
@@ -1245,7 +1241,7 @@ async def monitor_pr_comments(js, base_path: Path, active_prs: list[tuple[str, s
     # Process each repository
     for repository, pr_numbers in prs_by_repo.items():
         # Get the earliest last check timestamp for this repository
-        last_check = get_repository_last_comment_check(base_path, repository, "pr")
+        last_check = get_repository_last_comment_check(base_path, repository)
 
         if last_check:
             print(f"Checking PR comments for {repository} since {last_check}...")
@@ -1265,7 +1261,7 @@ async def monitor_pr_comments(js, base_path: Path, active_prs: list[tuple[str, s
 
                 for comment in comments:
                     # Check if this comment is newer than the last check for this specific PR
-                    pr_last_check = get_last_comment_check(base_path, repository, pr_number, "pr")
+                    pr_last_check = get_last_comment_check(base_path, repository, pr_number)
                     if pr_last_check and comment["updated_at"] <= pr_last_check:
                         continue
 
@@ -1276,8 +1272,10 @@ async def monitor_pr_comments(js, base_path: Path, active_prs: list[tuple[str, s
                     }
 
                     if dry_run:
+                        author = comment["author"]
                         print(
-                            f"    [DRY RUN] Would publish github.pr.comment.new event for comment by {comment['author']} on #{pr_number}"
+                            f"    [DRY RUN] Would publish github.pr.comment.new event "
+                            f"for comment by {author} on #{pr_number}"
                         )
                     else:
                         await publish_event(js, "github.pr.comment.new", event_data)
@@ -1288,6 +1286,6 @@ async def monitor_pr_comments(js, base_path: Path, active_prs: list[tuple[str, s
         # Update the last check timestamp for each PR
         if not dry_run:
             for pr_number in pr_numbers:
-                save_last_comment_check(base_path, repository, pr_number, current_time, "pr")
+                save_last_comment_check(base_path, repository, pr_number, current_time)
 
     return new_comments_count

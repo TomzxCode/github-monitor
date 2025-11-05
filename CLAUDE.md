@@ -80,8 +80,7 @@ The system uses a hierarchical directory structure to track issues/PRs:
 ├── .active          # Flag file indicating this issue/PR should be actively monitored
 ├── .type            # Contains "issue" or "pr" (cached to avoid API calls)
 ├── .last_checked    # ISO8601 timestamp of last monitoring check
-├── .last_issue_comment_check  # Last time issue comments were checked
-└── .last_pr_comment_check     # Last time PR comments were checked
+└── .last_comment_check  # Last time comments were checked (unified for both issues and PRs)
 ```
 
 ### Event Types
@@ -151,3 +150,10 @@ Consumer configuration:
 - Durable consumer for resumability
 - Explicit acknowledgment
 - DeliverPolicy.ALL for new consumers (processes all retained messages)
+
+# MUST DO
+
+* Always update CLAUDE.md
+* Always update README.md
+* Always run tests after changes are done
+* Always run linter/formatter after changes are done
