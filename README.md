@@ -2,12 +2,18 @@
 
 Monitor GitHub issues, pull requests, and their comments through polling with `gh` CLI, and publish events to NATS JetStream for automated processing.
 
+This tool's intent is to help manage and automate workflows around GitHub issues and PRs by integrating with Claude CLI for AI-driven automation.
+
+You define a set of markdown templates that act as prompts for Claude CLI when specific events occur (e.g., new issue, updated PR, new comment).
+You can then either have Claude automatically respond to issues/PRs or use it to generate summaries, labels, or other metadata.
+
 ## Overview
 
-This tool provides a single command with two subcommands:
+This tool provides a single command with three subcommands:
 
 - **`github-monitor monitor`**: Polls GitHub repositories for issues, PRs, and comments, publishing events to NATS JetStream
 - **`github-monitor event-handler`**: Consumes events from NATS and handles them (creates directories, invokes Claude CLI with templates, etc.)
+- **`github-monitor pr-comment`**: Submit comments on GitHub Pull Requests (both general and line-specific review comments)
 
 ## Features
 
@@ -140,6 +146,40 @@ github-monitor event-handler ./data --skip-users dependabot renovate-bot
 # Reprocess all events from the beginning
 github-monitor event-handler ./data --recreate-consumer
 ```
+
+### github-monitor pr-comment
+
+Submit comments on GitHub Pull Requests.
+
+**Usage:**
+```bash
+github-monitor pr-comment REPO PR_NUMBER [OPTIONS]
+```
+
+**Options:**
+- `--comment`: Comment body text
+- `--file`: File path for line comment (relative to repository root)
+- `--line`: Line number for line comment
+- `--commit`: Commit SHA (optional, uses latest if not provided)
+- `--list-files`: List files changed in the PR
+- `--token`: GitHub token (or use GITHUB_TOKEN env var)
+
+**Examples:**
+```bash
+# Create a line comment on a specific file
+github-monitor pr-comment owner/repo 123 --file src/main.py --line 42 --comment "This needs refactoring"
+
+# Create a general PR comment
+github-monitor pr-comment owner/repo 123 --comment "Looks good to me!"
+
+# List files changed in a PR
+github-monitor pr-comment owner/repo 123 --list-files
+
+# Specify a commit SHA for the line comment
+github-monitor pr-comment owner/repo 123 --file src/main.py --line 42 --comment "Fix this" --commit abc123
+```
+
+**Note:** Make sure `GITHUB_TOKEN` is set in your environment or .env file, or pass via `--token`.
 
 ## Directory Structure
 

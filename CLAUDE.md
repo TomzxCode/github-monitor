@@ -31,16 +31,29 @@ uv run pytest
 
 ```bash
 # Monitor GitHub repositories (run once)
-uv run github-monitor /path/to/data --repositories owner/repo
+uv run github-monitor monitor /path/to/data --repositories owner/repo
 
 # Monitor with interval (e.g., every 5 minutes)
-uv run github-monitor /path/to/data --repositories owner/repo --interval 5m
+uv run github-monitor monitor /path/to/data --repositories owner/repo --interval 5m
 
 # Handle events from NATS
-uv run github-event-handler /path/to/data --templates-dir /path/to/templates
+uv run github-monitor event-handler /path/to/data --templates-dir /path/to/templates
 
 # Dry run (see what would happen without making changes)
-uv run github-monitor /path/to/data --repositories owner/repo --dry-run
+uv run github-monitor monitor /path/to/data --repositories owner/repo --dry-run
+
+# PR comment commands
+# Create a line comment on a specific file
+uv run github-monitor pr-comment owner/repo 123 --file src/main.py --line 42 --comment "This needs refactoring"
+
+# Create a general PR comment
+uv run github-monitor pr-comment owner/repo 123 --comment "Looks good to me!"
+
+# List files changed in a PR
+uv run github-monitor pr-comment owner/repo 123 --list-files
+
+# Specify a commit SHA for the line comment
+uv run github-monitor pr-comment owner/repo 123 --file src/main.py --line 42 --comment "Fix this" --commit abc123
 ```
 
 ### Testing Individual Components
@@ -120,6 +133,9 @@ Required CLI tools:
 Required Python packages:
 - `nats-py`: NATS JetStream client
 - `cyclopts`: CLI framework
+- `PyGithub`: GitHub API client (for PR comment functionality)
+- `python-dotenv`: Environment variable management
+- `structlog`: Structured logging
 
 ### GraphQL Query Strategy
 
@@ -155,5 +171,5 @@ Consumer configuration:
 
 * Always update CLAUDE.md
 * Always update README.md
-* Always run tests after changes are done
 * Always run linter/formatter after changes are done
+* Always run tests after changes are done
