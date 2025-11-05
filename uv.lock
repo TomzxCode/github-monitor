@@ -218,6 +218,7 @@ dependencies = [
     { name = "nats-py" },
     { name = "pygithub" },
     { name = "python-dotenv" },
+    { name = "requests" },
     { name = "structlog" },
 ]
 
@@ -234,6 +235,7 @@ requires-dist = [
     { name = "nats-py", specifier = ">=2.1.0,<3" },
     { name = "pygithub", specifier = ">=2.1.1" },
     { name = "python-dotenv", specifier = ">=0.19.0" },
+    { name = "requests", specifier = ">=2.31.0" },
     { name = "structlog", specifier = ">=24.0.0" },
 ]
 

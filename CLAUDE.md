@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-GitHub Monitor is a Python-based system that monitors GitHub issues and pull requests through polling, then publishes events to NATS JetStream for processing. The system consists of two main components:
+GitHub Monitor is a Python-based system that monitors GitHub issues and pull requests through polling using GitHub's GraphQL API directly, then publishes events to NATS JetStream for processing. The system consists of two main components:
 
-1. **Monitor** (`github-monitor`): Polls GitHub repositories for issues/PRs and publishes events to NATS
+1. **Monitor** (`github-monitor`): Polls GitHub repositories for issues/PRs using GraphQL API and publishes events to NATS
 2. **Event Handler** (`github-event-handler`): Consumes events from NATS and invokes Claude CLI to process them
 
 ## Commands
@@ -75,7 +75,7 @@ uv run pytest -v
 
 The system is designed as a producer-consumer pattern:
 
-1. **Monitor (Producer)**: Polls GitHub using `gh` CLI and GraphQL queries, then publishes events to NATS JetStream
+1. **Monitor (Producer)**: Polls GitHub using direct GraphQL API requests, then publishes events to NATS JetStream
 2. **Event Handler (Consumer)**: Listens to NATS events and invokes Claude CLI to process them using customizable templates
 
 ### Event Flow
@@ -126,8 +126,10 @@ An empty template file is used to skip processing for specific events.
 
 ### Dependencies
 
+Required environment variables:
+- `GITHUB_TOKEN`: GitHub Personal Access Token for API authentication
+
 Required CLI tools:
-- `gh` (GitHub CLI): Used for API calls
 - `claude` (optional): Used by event handler to process events
 
 Required Python packages:
@@ -136,15 +138,19 @@ Required Python packages:
 - `PyGithub`: GitHub API client (for PR comment functionality)
 - `python-dotenv`: Environment variable management
 - `structlog`: Structured logging
+- `requests`: HTTP client for GraphQL API requests
 
-### GraphQL Query Strategy
+### GraphQL API Implementation
 
 The monitor uses GitHub's GraphQL API for efficient data fetching:
 
+- Custom `GitHubGraphQLClient` class handles authentication and request execution
+- Uses `GITHUB_TOKEN` environment variable for authentication (loaded from `.env` or environment)
 - Fetches up to 100 items per page with automatic pagination
 - Uses `filterBy: {since: timestamp}` to only fetch recently updated items
 - Batches comment fetching at the repository level for efficiency
 - Caches item types (issue vs PR) in `.type` files to reduce API calls
+- All GraphQL queries execute via direct HTTPS requests to `https://api.github.com/graphql`
 
 ### Comment Monitoring Optimization
 

@@ -1,7 +1,7 @@
 [project]
 name = "github-monitor"
 version = "0.1.0"
-description = "Monitor GitHub issues, PRs, issues and PRs comments through polling with gh"
+description = "Monitor GitHub issues, PRs, and comments through polling with GitHub GraphQL API"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -10,6 +10,7 @@ dependencies = [
 	"PyGithub>=2.1.1",
 	"python-dotenv>=0.19.0",
 	"structlog>=24.0.0",
+	"requests>=2.31.0",
 ]
 
 [project.scripts]

@@ -1,6 +1,6 @@
 # GitHub Monitor
 
-Monitor GitHub issues, pull requests, and their comments through polling with `gh` CLI, and publish events to NATS JetStream for automated processing.
+Monitor GitHub issues, pull requests, and their comments through polling with GitHub's GraphQL API, and publish events to NATS JetStream for automated processing.
 
 This tool's intent is to help manage and automate workflows around GitHub issues and PRs by integrating with Claude CLI for AI-driven automation.
 
@@ -29,7 +29,7 @@ This tool provides a single command with three subcommands:
 ## Requirements
 
 - Python 3.13+
-- [gh CLI](https://cli.github.com/) (GitHub CLI)
+- GitHub Personal Access Token (set via `GITHUB_TOKEN` environment variable)
 - [NATS server](https://nats.io/) with JetStream enabled
 - [Claude CLI](https://github.com/anthropics/anthropic-quickstarts) (optional, for event handling)
 
@@ -42,6 +42,26 @@ uv sync
 # Install the package
 uv pip install -e .
 ```
+
+## Configuration
+
+Create a `.env` file in the project root with your GitHub token:
+
+```bash
+GITHUB_TOKEN=your_github_personal_access_token_here
+```
+
+Alternatively, export the token as an environment variable:
+
+```bash
+export GITHUB_TOKEN=your_github_personal_access_token_here
+```
+
+To create a GitHub Personal Access Token:
+1. Go to GitHub Settings > Developer settings > Personal access tokens > Tokens (classic)
+2. Click "Generate new token"
+3. Select scopes: `repo` (for private repositories) or `public_repo` (for public repositories only)
+4. Copy the generated token
 
 ## Quick Start
 

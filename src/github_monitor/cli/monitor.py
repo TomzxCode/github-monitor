@@ -10,9 +10,9 @@ import cyclopts
 from nats.aio.client import Client as NATS
 
 from github_monitor.monitor import (
-    check_gh_installed,
     ensure_jetstream_stream,
     find_active_issues,
+    get_github_client,
     get_tracked_repositories,
     is_pull_request,
     monitor_issue_comments,
@@ -244,12 +244,12 @@ def monitor(
     else:
         args.interval = None
 
-    # Check dependencies
-    if not check_gh_installed():
-        print(
-            "Error: gh CLI is not installed. Install it from https://cli.github.com/",
-            file=sys.stderr,
-        )
+    # Check that GitHub token is available
+    try:
+        get_github_client()
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        print("Please set GITHUB_TOKEN environment variable or create a .env file.", file=sys.stderr)
         sys.exit(1)
 
     # Run async main with proper keyboard interrupt handling

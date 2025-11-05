@@ -25,36 +25,93 @@ Events published:
 """
 
 import json
+import os
 import re
-import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
+import requests
+from dotenv import load_dotenv
 from nats.aio.client import Client as NATS
 from nats.js.api import DiscardPolicy, RetentionPolicy, StreamConfig
 
 
-def run_command(cmd: list[str], capture_output: bool = True) -> subprocess.CompletedProcess:
-    """Run a command and return the result."""
-    try:
-        result = subprocess.run(cmd, capture_output=capture_output, text=True, check=True)
-        return result
-    except subprocess.CalledProcessError as e:
-        print(f"Error running command {' '.join(cmd)}: {e}", file=sys.stderr)
-        if e.stderr:
-            print(f"stderr: {e.stderr}", file=sys.stderr)
-        raise
+# Load environment variables from .env file
+load_dotenv()
 
 
-def check_gh_installed() -> bool:
-    """Check if gh CLI is installed."""
-    try:
-        subprocess.run(["gh", "--version"], capture_output=True, check=True)
-        return True
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return False
+class GitHubGraphQLClient:
+    """Client for making GraphQL requests to GitHub API."""
+
+    def __init__(self, token: Optional[str] = None):
+        """
+        Initialize the GitHub GraphQL client.
+
+        Args:
+            token: GitHub personal access token. If not provided, will try to get from GITHUB_TOKEN env var.
+
+        Raises:
+            ValueError: If no token is provided and GITHUB_TOKEN env var is not set.
+        """
+        self.token = token or os.getenv("GITHUB_TOKEN")
+        if not self.token:
+            raise ValueError("GitHub token is required. Set GITHUB_TOKEN environment variable or pass token parameter.")
+
+        self.api_url = "https://api.github.com/graphql"
+        self.headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json",
+        }
+
+    def execute(self, query: str) -> dict[str, Any]:
+        """
+        Execute a GraphQL query.
+
+        Args:
+            query: GraphQL query string
+
+        Returns:
+            Response data dictionary
+
+        Raises:
+            requests.HTTPError: If the request fails
+            ValueError: If the response contains errors
+        """
+        try:
+            response = requests.post(
+                self.api_url,
+                headers=self.headers,
+                json={"query": query},
+                timeout=30,
+            )
+            response.raise_for_status()
+
+            data = response.json()
+
+            # Check for GraphQL errors
+            if "errors" in data:
+                error_messages = [e.get("message", str(e)) for e in data["errors"]]
+                raise ValueError(f"GraphQL errors: {', '.join(error_messages)}")
+
+            return data
+
+        except requests.RequestException as e:
+            print(f"Error executing GraphQL query: {e}", file=sys.stderr)
+            raise
+
+
+# Global client instance (will be initialized on first use)
+_github_client: Optional[GitHubGraphQLClient] = None
+
+
+def get_github_client() -> GitHubGraphQLClient:
+    """Get or create the global GitHub GraphQL client instance."""
+    global _github_client
+    if _github_client is None:
+        _github_client = GitHubGraphQLClient()
+    return _github_client
 
 
 def parse_duration(duration_str: str) -> int:
@@ -301,12 +358,12 @@ def _fetch_paginated_items(
     items = {}
     has_next_page = True
     end_cursor = None
+    client = get_github_client()
 
     while has_next_page:
         try:
-            result = run_command(["gh", "api", "graphql", "-f", f"query={query_builder(end_cursor)}"])
-
-            data = json.loads(result.stdout)
+            query = query_builder(end_cursor)
+            data = client.execute(query)
 
             # Navigate to the data using the path
             current = data.get("data", {})
@@ -335,12 +392,7 @@ def _fetch_paginated_items(
             has_next_page = current["pageInfo"]["hasNextPage"]
             end_cursor = current["pageInfo"]["endCursor"]
 
-        except (
-            subprocess.CalledProcessError,
-            json.JSONDecodeError,
-            KeyError,
-            ValueError,
-        ) as e:
+        except (KeyError, ValueError, requests.RequestException) as e:
             print(f"Error fetching items for {repository}: {e}", file=sys.stderr)
             break
 
@@ -608,13 +660,11 @@ def _fetch_paginated_comments(
         comments = []
         has_next_page = True
         end_cursor = None
+        client = get_github_client()
 
         while has_next_page:
             query = _build_comment_query(owner, repo, number, item_type, end_cursor)
-
-            result = run_command(["gh", "api", "graphql", "-f", f"query={query}"])
-
-            data = json.loads(result.stdout)
+            data = client.execute(query)
 
             # Navigate to the correct data path
             type_key = "issue" if item_type == "issue" else "pullRequest"
@@ -642,12 +692,7 @@ def _fetch_paginated_comments(
             end_cursor = comment_data["pageInfo"]["endCursor"]
 
         return comments
-    except (
-        subprocess.CalledProcessError,
-        json.JSONDecodeError,
-        KeyError,
-        ValueError,
-    ) as e:
+    except (KeyError, ValueError, requests.RequestException) as e:
         print(f"Error getting comments for {repository}#{number}: {e}", file=sys.stderr)
         return []
 
@@ -732,15 +777,24 @@ def is_pull_request(repository: str, number: str, base_path: Optional[Path] = No
         if cached_type is not None:
             return cached_type == "pr"
 
-    # If not cached, check via API
+    # If not cached, check via API using GraphQL
     try:
-        # Try to get PR info - if it succeeds, it's a PR
-        result = subprocess.run(
-            ["gh", "pr", "view", number, "--repo", repository],
-            capture_output=True,
-            text=True,
-        )
-        is_pr = result.returncode == 0
+        owner, repo = repository.split("/")
+        client = get_github_client()
+
+        # Try to get PR info - if it exists, it's a PR
+        query = f"""
+        {{
+          repository(owner: "{owner}", name: "{repo}") {{
+            pullRequest(number: {number}) {{
+              number
+            }}
+          }}
+        }}
+        """
+
+        data = client.execute(query)
+        is_pr = data.get("data", {}).get("repository", {}).get("pullRequest") is not None
 
         # Cache the result if base_path is provided
         if base_path:
@@ -934,9 +988,8 @@ def get_all_repository_comments(
             }}
             """
 
-            result = run_command(["gh", "api", "graphql", "-f", f"query={query}"])
-
-            data = json.loads(result.stdout)
+            client = get_github_client()
+            data = client.execute(query)
             items_data = data.get("data", {}).get("repository", {}).get(type_name)
 
             if not items_data:
@@ -966,12 +1019,7 @@ def get_all_repository_comments(
 
         return comments_by_number
 
-    except (
-        subprocess.CalledProcessError,
-        json.JSONDecodeError,
-        KeyError,
-        ValueError,
-    ) as e:
+    except (KeyError, ValueError, requests.RequestException) as e:
         print(f"Error getting repository comments for {repository}: {e}", file=sys.stderr)
         return {}
 
