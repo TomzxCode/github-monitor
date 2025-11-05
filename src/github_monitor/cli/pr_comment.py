@@ -71,6 +71,9 @@ def pr_comment(
                 "Either provide --list-files, or --comment (with optional --file and --line)"
             )
 
+    except cyclopts.ValidationError as e:
+        print("\n❌ Validation error: Either provide --list-files, or --comment (with optional --file and --line)")
+        raise SystemExit(1) from e
     except Exception as e:
         logger.error("operation_failed", error=str(e))
         print(f"\n❌ Failed to complete operation: {e}")
