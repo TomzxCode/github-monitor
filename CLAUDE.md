@@ -43,17 +43,17 @@ uv run github-monitor event-handler /path/to/data --templates-dir /path/to/templ
 uv run github-monitor monitor /path/to/data --repositories owner/repo --dry-run
 
 # PR comment commands
-# Create a line comment on a specific file
+# Create a line comment on a specific file (creates pending review)
 uv run github-monitor pr-comment owner/repo 123 --file src/main.py --line 42 --comment "This needs refactoring"
 
 # Create a general PR comment
 uv run github-monitor pr-comment owner/repo 123 --comment "Looks good to me!"
 
-# List files changed in a PR
-uv run github-monitor pr-comment owner/repo 123 --list-files
+# Create a line comment and submit as a review with approval
+uv run github-monitor pr-comment owner/repo 123 --file src/main.py --line 42 --comment "LGTM" --submit approve
 
-# Specify a commit SHA for the line comment
-uv run github-monitor pr-comment owner/repo 123 --file src/main.py --line 42 --comment "Fix this" --commit abc123
+# Create a line comment and submit as a review requesting changes
+uv run github-monitor pr-comment owner/repo 123 --file src/main.py --line 42 --comment "Please fix" --submit request_changes
 ```
 
 ### Testing Individual Components
@@ -135,7 +135,6 @@ Required CLI tools:
 Required Python packages:
 - `nats-py`: NATS JetStream client
 - `cyclopts`: CLI framework
-- `PyGithub`: GitHub API client (for PR comment functionality)
 - `python-dotenv`: Environment variable management
 - `structlog`: Structured logging
 - `requests`: HTTP client for GraphQL API requests

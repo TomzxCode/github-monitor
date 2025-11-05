@@ -180,23 +180,22 @@ github-monitor pr-comment REPO PR_NUMBER [OPTIONS]
 - `--comment`: Comment body text
 - `--file`: File path for line comment (relative to repository root)
 - `--line`: Line number for line comment
-- `--commit`: Commit SHA (optional, uses latest if not provided)
-- `--list-files`: List files changed in the PR
+- `--submit`: Submit a review with event: `approve`, `request_changes`, or `comment` (requires `--file` and `--line`)
 - `--token`: GitHub token (or use GITHUB_TOKEN env var)
 
 **Examples:**
 ```bash
-# Create a line comment on a specific file
+# Create a line comment on a specific file (creates pending review)
 github-monitor pr-comment owner/repo 123 --file src/main.py --line 42 --comment "This needs refactoring"
 
 # Create a general PR comment
 github-monitor pr-comment owner/repo 123 --comment "Looks good to me!"
 
-# List files changed in a PR
-github-monitor pr-comment owner/repo 123 --list-files
+# Submit a review with approval on a specific line
+github-monitor pr-comment owner/repo 123 --file src/main.py --line 42 --comment "LGTM" --submit approve
 
-# Specify a commit SHA for the line comment
-github-monitor pr-comment owner/repo 123 --file src/main.py --line 42 --comment "Fix this" --commit abc123
+# Submit a review requesting changes on a specific line
+github-monitor pr-comment owner/repo 123 --file src/main.py --line 42 --comment "Please fix" --submit request_changes
 ```
 
 **Note:** Make sure `GITHUB_TOKEN` is set in your environment or .env file, or pass via `--token`.
