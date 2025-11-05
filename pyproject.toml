@@ -7,7 +7,6 @@ requires-python = ">=3.13"
 dependencies = [
 	"nats-py>=2.1.0,<3",
 	"cyclopts>4.2.0,<5",
-	"PyGithub>=2.1.1",
 	"python-dotenv>=0.19.0",
 	"structlog>=24.0.0",
 	"requests>=2.31.0",

@@ -37,81 +37,11 @@ from dotenv import load_dotenv
 from nats.aio.client import Client as NATS
 from nats.js.api import DiscardPolicy, RetentionPolicy, StreamConfig
 
+from github_monitor.github_client import GitHubGraphQLClient, get_github_client
+
 
 # Load environment variables from .env file
 load_dotenv()
-
-
-class GitHubGraphQLClient:
-    """Client for making GraphQL requests to GitHub API."""
-
-    def __init__(self, token: Optional[str] = None):
-        """
-        Initialize the GitHub GraphQL client.
-
-        Args:
-            token: GitHub personal access token. If not provided, will try to get from GITHUB_TOKEN env var.
-
-        Raises:
-            ValueError: If no token is provided and GITHUB_TOKEN env var is not set.
-        """
-        self.token = token or os.getenv("GITHUB_TOKEN")
-        if not self.token:
-            raise ValueError("GitHub token is required. Set GITHUB_TOKEN environment variable or pass token parameter.")
-
-        self.api_url = "https://api.github.com/graphql"
-        self.headers = {
-            "Authorization": f"Bearer {self.token}",
-            "Content-Type": "application/json",
-        }
-
-    def execute(self, query: str) -> dict[str, Any]:
-        """
-        Execute a GraphQL query.
-
-        Args:
-            query: GraphQL query string
-
-        Returns:
-            Response data dictionary
-
-        Raises:
-            requests.HTTPError: If the request fails
-            ValueError: If the response contains errors
-        """
-        try:
-            response = requests.post(
-                self.api_url,
-                headers=self.headers,
-                json={"query": query},
-                timeout=30,
-            )
-            response.raise_for_status()
-
-            data = response.json()
-
-            # Check for GraphQL errors
-            if "errors" in data:
-                error_messages = [e.get("message", str(e)) for e in data["errors"]]
-                raise ValueError(f"GraphQL errors: {', '.join(error_messages)}")
-
-            return data
-
-        except requests.RequestException as e:
-            print(f"Error executing GraphQL query: {e}", file=sys.stderr)
-            raise
-
-
-# Global client instance (will be initialized on first use)
-_github_client: Optional[GitHubGraphQLClient] = None
-
-
-def get_github_client() -> GitHubGraphQLClient:
-    """Get or create the global GitHub GraphQL client instance."""
-    global _github_client
-    if _github_client is None:
-        _github_client = GitHubGraphQLClient()
-    return _github_client
 
 
 def parse_duration(duration_str: str) -> int:
