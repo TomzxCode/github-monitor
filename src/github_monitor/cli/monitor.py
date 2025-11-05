@@ -148,12 +148,15 @@ async def monitor_main(args):
 
                     if sleep_duration > 0:
                         print(
-                            f"=== Cycle {cycle_count} completed in {elapsed_seconds:.2f}s. Waiting {sleep_duration:.2f}s until next cycle ===\n"
+                            f"=== Cycle {cycle_count} completed in {elapsed_seconds:.2f}s. "
+                            f"Waiting {sleep_duration:.2f}s until next cycle ===\n"
                         )
                         await asyncio.sleep(sleep_duration)
                     else:
                         print(
-                            f"=== Cycle {cycle_count} completed in {elapsed_seconds:.2f}s. Cycle took longer than interval ({args.interval}s), starting next cycle immediately ===\n"
+                            f"=== Cycle {cycle_count} completed in {elapsed_seconds:.2f}s. "
+                            f"Cycle took longer than interval ({args.interval}s), "
+                            f"starting next cycle immediately ===\n"
                         )
             except KeyboardInterrupt:
                 print("\n\n=== Monitoring interrupted by user ===")
@@ -207,7 +210,10 @@ def monitor(
     interval: Annotated[
         str | None,
         cyclopts.Parameter(
-            help="Run monitoring at this interval (format: AdBhCmDs, e.g., 5m, 1h30m, 2d). If not specified, runs once and exits."
+            help=(
+                "Run monitoring at this interval (format: AdBhCmDs, e.g., 5m, 1h30m, 2d). "
+                "If not specified, runs once and exits."
+            )
         ),
     ] = None,
 ):
