@@ -39,6 +39,9 @@ uv run github-monitor monitor /path/to/data --repositories owner/repo --interval
 # Handle events from NATS
 uv run github-monitor event-handler /path/to/data --templates-dir /path/to/templates
 
+# Adjust AckWait timeout for very long Claude operations (default is 300 seconds)
+uv run github-monitor event-handler /path/to/data --templates-dir /path/to/templates --ack-wait 600
+
 # Dry run (see what would happen without making changes)
 uv run github-monitor monitor /path/to/data --repositories owner/repo --dry-run
 
@@ -171,6 +174,16 @@ Consumer configuration:
 - Durable consumer for resumability
 - Explicit acknowledgment
 - DeliverPolicy.ALL for new consumers (processes all retained messages)
+- Configurable `ack_wait` timeout (default: 300 seconds) for long-running message processing
+
+### Long-Running Message Processing
+
+Since Claude CLI invocations can take longer than the default NATS AckWait timeout, the system implements two strategies:
+
+1. **Extended AckWait**: The consumer is configured with a 5-minute (300 second) `ack_wait` timeout by default, which can be adjusted via the `--ack-wait` CLI parameter
+2. **In-Progress Signaling**: During Claude CLI execution, the system sends periodic `msg.in_progress()` signals every 20 seconds to extend the acknowledgment deadline, preventing message redelivery while processing is ongoing
+
+This combination ensures that even lengthy Claude operations complete successfully without timing out or causing duplicate processing.
 
 # MUST DO
 

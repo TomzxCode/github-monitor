@@ -17,10 +17,12 @@ This module:
 Directory structure: {base_path}/{owner}/{repo}/{issue_or_pr_number}/
 """
 
+import asyncio
 import json
 import re
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 
@@ -317,7 +319,13 @@ class EventHandler:
             print(f"[{log_prefix}] No template found for {event_name}, skipping")
             return
 
-        if invoke_claude(self.base_path, repository, number, template_path, self.claude_verbose):
+        if invoke_claude(
+            self.base_path,
+            repository,
+            number,
+            template_path,
+            self.claude_verbose,
+        ):
             print(f"[{log_prefix}] Successfully invoked claude")
         else:
             print(f"[{log_prefix}] Failed to invoke claude")
@@ -426,6 +434,28 @@ async def message_handler(
 ):
     """Handle incoming NATS JetStream messages."""
     subject = msg.subject
+
+    # Set up background thread for periodic in-progress signaling
+    stop_signaling = threading.Event()
+    signal_interval = 20  # Signal every 20 seconds
+
+    def signal_in_progress():
+        """Background thread to periodically signal message processing is in progress."""
+        while not stop_signaling.is_set():
+            # Wait for the interval or until stop is signaled
+            if stop_signaling.wait(signal_interval):
+                break  # Event was set, exit loop
+            try:
+                # Send in-progress signal to NATS
+                asyncio.run(msg.in_progress())
+                print("[NATS] Sent in-progress signal to extend ack deadline", file=sys.stderr)
+            except Exception as e:
+                print(f"Warning: Failed to signal in-progress: {e}", file=sys.stderr)
+
+    # Start the signaling thread
+    signal_thread = threading.Thread(target=signal_in_progress, daemon=True)
+    signal_thread.start()
+
     try:
         data = json.loads(msg.data.decode())
         repository = data["repository"]
@@ -442,12 +472,16 @@ async def message_handler(
         # Check if we should skip this repository
         if should_skip_repository(repository, repo_pattern):
             print(f"Skipping {repository}#{number} (repository not in filter)")
+            stop_signaling.set()
+            signal_thread.join(timeout=1)
             await msg.ack()
             return
 
         # Check if we should skip this user
         if should_skip_user(author, skip_user_pattern):
             print(f"Skipping {repository}#{number} from user {author}")
+            stop_signaling.set()
+            signal_thread.join(timeout=1)
             await msg.ack()
             return
 
@@ -477,15 +511,25 @@ async def message_handler(
         else:
             print(f"Unknown subject: {subject}")
 
+        # Stop the signaling thread before acknowledging
+        stop_signaling.set()
+        signal_thread.join(timeout=1)
+
         # Acknowledge the message after successful processing
         await msg.ack()
 
     except json.JSONDecodeError as e:
         print(f"Error decoding message: {e}", file=sys.stderr)
+        stop_signaling.set()
+        signal_thread.join(timeout=1)
         await msg.nak()  # Negative acknowledgment - will be redelivered
     except KeyError as e:
         print(f"Missing required field in event data: {e}", file=sys.stderr)
+        stop_signaling.set()
+        signal_thread.join(timeout=1)
         await msg.term()  # Terminal error - don't redeliver
     except Exception as e:
         print(f"Error handling message: {e}", file=sys.stderr)
+        stop_signaling.set()
+        signal_thread.join(timeout=1)
         await msg.nak()  # Negative acknowledgment - will be redelivered

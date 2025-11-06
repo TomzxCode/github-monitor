@@ -98,6 +98,9 @@ github-monitor event-handler /path/to/data --templates-dir /path/to/templates
 
 # Skip events from users matching regex pattern
 github-monitor event-handler /path/to/data --skip-users "^(dependabot|renovate)"
+
+# Adjust AckWait timeout for very long Claude operations (default is 300 seconds)
+github-monitor event-handler /path/to/data --ack-wait 600
 ```
 
 ## Commands
@@ -150,6 +153,7 @@ github-monitor event-handler PATH [OPTIONS]
 - `--consumer`: Durable consumer name (default: `github-event-handler`)
 - `--batch-size`: Number of messages to fetch per batch (default: 10)
 - `--fetch-timeout`: Timeout in seconds for fetching messages (default: 5.0)
+- `--ack-wait`: AckWait timeout in seconds for message processing (default: 300)
 - `--skip-users`: Regex pattern to match usernames to skip event handling for
 - `--recreate-consumer`: Delete and recreate the consumer (useful for reprocessing all messages)
 - `--claude-verbose`: Print raw Claude CLI output directly to stdout

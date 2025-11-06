@@ -70,17 +70,19 @@ async def event_handler_main(args):
             pass
 
         if not consumer_exists:
-            # Create consumer with DeliverPolicy.ALL
+            # Create consumer with DeliverPolicy.ALL and extended ack_wait
             print("Creating new consumer with DeliverPolicy.ALL...")
 
             consumer_config = ConsumerConfig(
                 durable_name=args.consumer,
                 deliver_policy=DeliverPolicy.ALL,
                 ack_policy="explicit",
+                ack_wait=args.ack_wait,  # Extended timeout for long-running operations
             )
             await js.add_consumer(args.stream, consumer_config)
             consumer_info = await js.consumer_info(args.stream, args.consumer)
             print(f"Created new consumer '{args.consumer}' (pending: {consumer_info.num_pending})")
+            print(f"Consumer configured with ack_wait={args.ack_wait} seconds")
 
         # Subscribe to JetStream stream with durable consumer
         print("Creating pull subscription...")
@@ -131,6 +133,7 @@ def event_handler(
     consumer: Annotated[str, cyclopts.Parameter(help="Durable consumer name")] = "github-event-handler",
     batch_size: Annotated[int, cyclopts.Parameter(help="Number of messages to fetch per batch")] = 10,
     fetch_timeout: Annotated[float, cyclopts.Parameter(help="Timeout in seconds for fetching messages")] = 5.0,
+    ack_wait: Annotated[int, cyclopts.Parameter(help="AckWait timeout in seconds for message processing")] = 300,
     skip_users: Annotated[
         str | None, cyclopts.Parameter(help="Regex pattern to match usernames to skip event handling for")
     ] = None,
@@ -167,6 +170,7 @@ def event_handler(
     args.consumer = consumer
     args.batch_size = batch_size
     args.fetch_timeout = fetch_timeout
+    args.ack_wait = ack_wait
     args.skip_users = skip_users
     args.repositories = repositories
     args.recreate_consumer = recreate_consumer
