@@ -33,6 +33,7 @@ async def event_handler_main(args):
         claude_available=claude_available,
         templates_dir=args.templates_dir,
         skip_users=args.skip_users,
+        repositories=args.repositories,
         claude_verbose=args.claude_verbose,
     )
 
@@ -133,6 +134,12 @@ def event_handler(
     skip_users: Annotated[
         str | None, cyclopts.Parameter(help="Regex pattern to match usernames to skip event handling for")
     ] = None,
+    repositories: Annotated[
+        str | None,
+        cyclopts.Parameter(
+            help="Regex pattern to filter repositories (e.g., 'owner/repo' or '.*my-org.*'). Only matching repositories will be processed."
+        ),
+    ] = None,
     recreate_consumer: Annotated[
         bool, cyclopts.Parameter(help="Delete and recreate the consumer (useful for reprocessing all messages)")
     ] = False,
@@ -161,6 +168,7 @@ def event_handler(
     args.batch_size = batch_size
     args.fetch_timeout = fetch_timeout
     args.skip_users = skip_users
+    args.repositories = repositories
     args.recreate_consumer = recreate_consumer
     args.claude_verbose = claude_verbose
     args.auto_confirm = auto_confirm

@@ -272,6 +272,7 @@ class EventHandler:
         claude_available: bool = True,
         templates_dir: Path | None = None,
         skip_users: str | None = None,
+        repositories: str | None = None,
         claude_verbose: bool = False,
     ):
         self.base_path = base_path
@@ -279,6 +280,8 @@ class EventHandler:
         self.templates_dir = templates_dir
         # Compile regex pattern from skip_users string
         self.skip_user_pattern = re.compile(skip_users) if skip_users else None
+        # Compile regex pattern from repositories string
+        self.repo_pattern = re.compile(repositories) if repositories else None
         self.claude_verbose = claude_verbose
 
     def _should_skip_user(self, username: str) -> bool:
@@ -286,6 +289,13 @@ class EventHandler:
         if self.skip_user_pattern is None:
             return False
         return self.skip_user_pattern.search(username) is not None
+
+    def _should_skip_repository(self, repository: str) -> bool:
+        """Check if events from this repository should be skipped using regex pattern."""
+        if self.repo_pattern is None:
+            return False
+        # Skip if repository doesn't match the pattern
+        return not self.repo_pattern.search(repository)
 
     def _invoke_claude_with_template(
         self, repository: str, number: str | int, event_name: str, log_prefix: str
@@ -319,6 +329,11 @@ class EventHandler:
         repository = data["repository"]
         number = data["number"]
 
+        # Check if we should skip this repository
+        if self._should_skip_repository(repository):
+            print(f"[NEW ISSUE] Skipping {repository}#{number} (repository not in filter)")
+            return
+
         # Check if we should skip this user
         if "author" in data and self._should_skip_user(data["author"]):
             print(f"[NEW ISSUE] Skipping {repository}#{number} from user {data['author']}")
@@ -335,6 +350,11 @@ class EventHandler:
         repository = data["repository"]
         number = data["number"]
 
+        # Check if we should skip this repository
+        if self._should_skip_repository(repository):
+            print(f"[UPDATE ISSUE] Skipping {repository}#{number} (repository not in filter)")
+            return
+
         # Check if we should skip this user
         if "author" in data and self._should_skip_user(data["author"]):
             print(f"[UPDATE ISSUE] Skipping {repository}#{number} from user {data['author']}")
@@ -348,6 +368,11 @@ class EventHandler:
         """Handle github.issue.closed event."""
         repository = data["repository"]
         number = data["number"]
+
+        # Check if we should skip this repository
+        if self._should_skip_repository(repository):
+            print(f"[CLOSE ISSUE] Skipping {repository}#{number} (repository not in filter)")
+            return
 
         # Check if we should skip this user
         if "author" in data and self._should_skip_user(data["author"]):
@@ -368,6 +393,11 @@ class EventHandler:
         repository = data["repository"]
         number = data["number"]
 
+        # Check if we should skip this repository
+        if self._should_skip_repository(repository):
+            print(f"[NEW PR] Skipping {repository}#{number} (repository not in filter)")
+            return
+
         # Check if we should skip this user
         if "author" in data and self._should_skip_user(data["author"]):
             print(f"[NEW PR] Skipping {repository}#{number} from user {data['author']}")
@@ -384,6 +414,11 @@ class EventHandler:
         repository = data["repository"]
         number = data["number"]
 
+        # Check if we should skip this repository
+        if self._should_skip_repository(repository):
+            print(f"[UPDATE PR] Skipping {repository}#{number} (repository not in filter)")
+            return
+
         # Check if we should skip this user
         if "author" in data and self._should_skip_user(data["author"]):
             print(f"[UPDATE PR] Skipping {repository}#{number} from user {data['author']}")
@@ -397,6 +432,11 @@ class EventHandler:
         """Handle github.pr.closed event."""
         repository = data["repository"]
         number = data["number"]
+
+        # Check if we should skip this repository
+        if self._should_skip_repository(repository):
+            print(f"[CLOSE PR] Skipping {repository}#{number} (repository not in filter)")
+            return
 
         # Check if we should skip this user
         if "author" in data and self._should_skip_user(data["author"]):
@@ -418,6 +458,11 @@ class EventHandler:
         number = data["number"]
         comment = data["comment"]
 
+        # Check if we should skip this repository
+        if self._should_skip_repository(repository):
+            print(f"[ISSUE COMMENT] Skipping {repository}#{number} (repository not in filter)")
+            return
+
         print(f"[ISSUE COMMENT] New comment on {repository}#{number}")
         print(f"[ISSUE COMMENT] Author: {comment['author']}")
         print(f"[ISSUE COMMENT] Created: {comment['created_at']}")
@@ -430,6 +475,11 @@ class EventHandler:
         repository = data["repository"]
         number = data["number"]
         comment = data["comment"]
+
+        # Check if we should skip this repository
+        if self._should_skip_repository(repository):
+            print(f"[PR COMMENT] Skipping {repository}#{number} (repository not in filter)")
+            return
 
         print(f"[PR COMMENT] New comment on {repository}#{number}")
         print(f"[PR COMMENT] Author: {comment['author']}")
