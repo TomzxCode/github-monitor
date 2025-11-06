@@ -1,10 +1,18 @@
 """Tests for github_monitor.event_handler module."""
 
+import re
 from pathlib import Path
 
 import pytest
 
-from github_monitor.event_handler import EventHandler, create_issue_directory, find_template, remove_active_file
+from github_monitor.event_handler import (
+    EventHandler,
+    create_issue_directory,
+    find_template,
+    remove_active_file,
+    should_skip_repository,
+    should_skip_user,
+)
 
 
 class TestCreateIssueDirectory:
@@ -166,16 +174,6 @@ class TestEventHandler:
         issue_dir = tmp_path / "owner1" / "repo1" / "123"
         assert issue_dir.exists()
 
-    async def test_handle_new_issue_skip_user(self, tmp_path: Path) -> None:
-        """Test skipping new issue from filtered user."""
-        handler = EventHandler(base_path=tmp_path, claude_available=False, skip_users="^bot-")
-        data = {"repository": "owner1/repo1", "number": 123, "author": "bot-user"}
-
-        await handler.handle_new_issue(data)
-
-        issue_dir = tmp_path / "owner1" / "repo1" / "123"
-        assert not issue_dir.exists()
-
     async def test_handle_closed_issue(self, handler: EventHandler, tmp_path: Path) -> None:
         """Test handling closed issue event."""
         # Setup: create issue directory with .active file
@@ -189,23 +187,6 @@ class TestEventHandler:
         await handler.handle_closed_issue(data)
 
         assert not active_file.exists()
-
-    async def test_handle_closed_issue_skip_user(self, tmp_path: Path) -> None:
-        """Test skipping closed issue from filtered user."""
-        handler = EventHandler(base_path=tmp_path, claude_available=False, skip_users="^bot-")
-
-        # Setup: create issue directory with .active file
-        issue_dir = tmp_path / "owner1" / "repo1" / "123"
-        issue_dir.mkdir(parents=True)
-        active_file = issue_dir / ".active"
-        active_file.touch()
-
-        data = {"repository": "owner1/repo1", "number": 123, "author": "bot-user"}
-
-        await handler.handle_closed_issue(data)
-
-        # .active file should still exist because user was skipped
-        assert active_file.exists()
 
     async def test_handle_new_pr(self, handler: EventHandler, tmp_path: Path) -> None:
         """Test handling new PR event."""
@@ -274,15 +255,59 @@ class TestEventHandler:
         # Should not raise error
         await handler.handle_pr_comment(data)
 
-    def test_should_skip_user(self, tmp_path: Path) -> None:
-        """Test user filtering logic."""
-        handler = EventHandler(base_path=tmp_path, claude_available=False, skip_users="^bot[12]$")
 
-        assert handler._should_skip_user("bot1") is True
-        assert handler._should_skip_user("bot2") is True
-        assert handler._should_skip_user("user1") is False
-        assert handler._should_skip_user("random") is False
+class TestShouldSkipUser:
+    """Tests for should_skip_user function."""
 
-    def test_no_skip_users(self, handler: EventHandler) -> None:
-        """Test when no skip_users are configured."""
-        assert handler._should_skip_user("anyone") is False
+    def test_should_skip_user_matches_pattern(self) -> None:
+        """Test skipping user that matches pattern."""
+        pattern = re.compile(r"^bot[12]$")
+        assert should_skip_user("bot1", pattern) is True
+        assert should_skip_user("bot2", pattern) is True
+
+    def test_should_skip_user_no_match(self) -> None:
+        """Test not skipping user that doesn't match pattern."""
+        pattern = re.compile(r"^bot[12]$")
+        assert should_skip_user("user1", pattern) is False
+        assert should_skip_user("random", pattern) is False
+        assert should_skip_user("bot3", pattern) is False
+
+    def test_should_skip_user_prefix_pattern(self) -> None:
+        """Test skipping user with prefix pattern."""
+        pattern = re.compile(r"^bot-")
+        assert should_skip_user("bot-user", pattern) is True
+        assert should_skip_user("bot-123", pattern) is True
+        assert should_skip_user("user-bot", pattern) is False
+
+    def test_should_skip_user_no_pattern(self) -> None:
+        """Test when no skip pattern is configured."""
+        assert should_skip_user("anyone", None) is False
+        assert should_skip_user("bot1", None) is False
+
+
+class TestShouldSkipRepository:
+    """Tests for should_skip_repository function."""
+
+    def test_should_skip_repository_matches_pattern(self) -> None:
+        """Test not skipping repository that matches pattern."""
+        pattern = re.compile(r"^owner1/")
+        assert should_skip_repository("owner1/repo1", pattern) is False
+        assert should_skip_repository("owner1/repo2", pattern) is False
+
+    def test_should_skip_repository_no_match(self) -> None:
+        """Test skipping repository that doesn't match pattern."""
+        pattern = re.compile(r"^owner1/")
+        assert should_skip_repository("owner2/repo1", pattern) is True
+        assert should_skip_repository("other/repo", pattern) is True
+
+    def test_should_skip_repository_specific_repo(self) -> None:
+        """Test with specific repository pattern."""
+        pattern = re.compile(r"^owner1/repo1$")
+        assert should_skip_repository("owner1/repo1", pattern) is False
+        assert should_skip_repository("owner1/repo2", pattern) is True
+        assert should_skip_repository("owner2/repo1", pattern) is True
+
+    def test_should_skip_repository_no_pattern(self) -> None:
+        """Test when no repository filter is configured."""
+        assert should_skip_repository("any/repo", None) is False
+        assert should_skip_repository("owner/project", None) is False

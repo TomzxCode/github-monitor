@@ -1,5 +1,6 @@
 """Tests for the event-handler CLI command."""
 
+from datetime import timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
@@ -21,7 +22,8 @@ class TestEventHandlerCommand:
         args.stream = "GITHUB_EVENTS"
         args.consumer = "github-event-handler"
         args.batch_size = 10
-        args.fetch_timeout = 5.0
+        args.fetch_timeout = timedelta(seconds=5)
+        args.ack_wait = timedelta(seconds=300)
         args.skip_users = None
         args.recreate_consumer = False
         args.claude_verbose = False
@@ -418,11 +420,11 @@ class TestEventHandlerCommand:
             event_handler(
                 path=tmp_path,
                 batch_size=20,
-                fetch_timeout=10.0,
+                fetch_timeout=timedelta(seconds=10),
             )
             args = mock_main.call_args[0][0]
             assert args.batch_size == 20
-            assert args.fetch_timeout == 10.0
+            assert args.fetch_timeout == timedelta(seconds=10)
 
     def test_event_handler_function_with_skip_users(self, tmp_path: Path):
         """Test event_handler function with skip_users pattern."""

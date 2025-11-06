@@ -2,7 +2,7 @@
 
 import asyncio
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Annotated
 
@@ -208,7 +208,7 @@ def monitor(
         ),
     ] = True,
     interval: Annotated[
-        str | None,
+        timedelta | None,
         cyclopts.Parameter(
             help=(
                 "Run monitoring at this interval (format: AdBhCmDs, e.g., 5m, 1h30m, 2d). "
@@ -233,16 +233,7 @@ def monitor(
     args.monitor_issue_comments = monitor_issue_comments
     args.monitor_pr_comments = monitor_pr_comments
     args.active_only = active_only
-
-    # Parse interval if provided
-    if interval:
-        try:
-            args.interval = parse_duration(interval)
-        except ValueError as e:
-            print(f"Error: {e}", file=sys.stderr)
-            sys.exit(1)
-    else:
-        args.interval = None
+    args.interval = interval.total_seconds() if interval else None
 
     # Check that GitHub token is available
     try:

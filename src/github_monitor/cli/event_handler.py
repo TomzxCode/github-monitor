@@ -2,6 +2,7 @@
 
 import asyncio
 import sys
+from datetime import timedelta
 from pathlib import Path
 from typing import Annotated
 
@@ -77,12 +78,12 @@ async def event_handler_main(args):
                 durable_name=args.consumer,
                 deliver_policy=DeliverPolicy.ALL,
                 ack_policy="explicit",
-                ack_wait=args.ack_wait,  # Extended timeout for long-running operations
+                ack_wait=int(args.ack_wait.total_seconds()),  # Extended timeout for long-running operations
             )
             await js.add_consumer(args.stream, consumer_config)
             consumer_info = await js.consumer_info(args.stream, args.consumer)
             print(f"Created new consumer '{args.consumer}' (pending: {consumer_info.num_pending})")
-            print(f"Consumer configured with ack_wait={args.ack_wait} seconds")
+            print(f"Consumer configured with ack_wait={int(args.ack_wait.total_seconds())} seconds")
 
         # Subscribe to JetStream stream with durable consumer
         print("Creating pull subscription...")
@@ -101,7 +102,7 @@ async def event_handler_main(args):
         while True:
             try:
                 # Fetch messages in batches
-                msgs = await psub.fetch(batch=args.batch_size, timeout=args.fetch_timeout)
+                msgs = await psub.fetch(batch=args.batch_size, timeout=args.fetch_timeout.total_seconds())
                 for msg in msgs:
                     await message_handler(msg, handler, args.auto_confirm)
             except TimeoutError:
@@ -132,8 +133,8 @@ def event_handler(
     stream: Annotated[str, cyclopts.Parameter(help="JetStream stream name")] = "GITHUB_EVENTS",
     consumer: Annotated[str, cyclopts.Parameter(help="Durable consumer name")] = "github-event-handler",
     batch_size: Annotated[int, cyclopts.Parameter(help="Number of messages to fetch per batch")] = 10,
-    fetch_timeout: Annotated[float, cyclopts.Parameter(help="Timeout in seconds for fetching messages")] = 5.0,
-    ack_wait: Annotated[int, cyclopts.Parameter(help="AckWait timeout in seconds for message processing")] = 300,
+    fetch_timeout: Annotated[timedelta, cyclopts.Parameter(help="Timeout for fetching messages (format: AdBhCmDs, e.g., 5s, 30s)")] = timedelta(seconds=5),
+    ack_wait: Annotated[timedelta, cyclopts.Parameter(help="AckWait timeout for message processing (format: AdBhCmDs, e.g., 5m, 300s)")] = timedelta(seconds=300),
     skip_users: Annotated[
         str | None, cyclopts.Parameter(help="Regex pattern to match usernames to skip event handling for")
     ] = None,
