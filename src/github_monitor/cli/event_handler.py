@@ -133,15 +133,20 @@ def event_handler(
     stream: Annotated[str, cyclopts.Parameter(help="JetStream stream name")] = "GITHUB_EVENTS",
     consumer: Annotated[str, cyclopts.Parameter(help="Durable consumer name")] = "github-event-handler",
     batch_size: Annotated[int, cyclopts.Parameter(help="Number of messages to fetch per batch")] = 10,
-    fetch_timeout: Annotated[timedelta, cyclopts.Parameter(help="Timeout for fetching messages (format: AdBhCmDs, e.g., 5s, 30s)")] = timedelta(seconds=5),
-    ack_wait: Annotated[timedelta, cyclopts.Parameter(help="AckWait timeout for message processing (format: AdBhCmDs, e.g., 5m, 300s)")] = timedelta(seconds=300),
+    fetch_timeout: Annotated[
+        timedelta, cyclopts.Parameter(help="Timeout for fetching messages (format: AdBhCmDs, e.g., 5s, 30s)")
+    ] = timedelta(seconds=5),
+    ack_wait: Annotated[
+        timedelta, cyclopts.Parameter(help="AckWait timeout for message processing (format: AdBhCmDs, e.g., 5m, 300s)")
+    ] = timedelta(seconds=300),
     skip_users: Annotated[
         str | None, cyclopts.Parameter(help="Regex pattern to match usernames to skip event handling for")
     ] = None,
     repositories: Annotated[
         str | None,
         cyclopts.Parameter(
-            help="Regex pattern to filter repositories (e.g., 'owner/repo' or '.*my-org.*'). Only matching repositories will be processed."
+            help="Regex pattern to filter repositories (e.g., 'owner/repo' or '.*my-org.*'). "
+            "Only matching repositories will be processed."
         ),
     ] = None,
     recreate_consumer: Annotated[

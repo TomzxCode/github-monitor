@@ -18,7 +18,6 @@ from github_monitor.monitor import (
     monitor_issue_comments,
     monitor_pr_comments,
     monitor_repositories,
-    parse_duration,
     process_active_issues,
 )
 
