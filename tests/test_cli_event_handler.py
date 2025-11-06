@@ -22,7 +22,7 @@ class TestEventHandlerCommand:
         args.consumer = "github-event-handler"
         args.batch_size = 10
         args.fetch_timeout = 5.0
-        args.skip_users = []
+        args.skip_users = None
         args.recreate_consumer = False
         args.claude_verbose = False
         args.auto_confirm = False
@@ -285,7 +285,7 @@ class TestEventHandlerCommand:
     @pytest.mark.asyncio
     async def test_event_handler_main_with_skip_users(self, mock_args):
         """Test event_handler_main with skip_users parameter."""
-        mock_args.skip_users = ["user1", "user2"]
+        mock_args.skip_users = "^bot-"
         mock_nc = MagicMock()
         mock_nc.is_connected = True
         mock_nc.connect = AsyncMock()
@@ -309,7 +309,7 @@ class TestEventHandlerCommand:
             assert result == 0
             # EventHandler should be created with skip_users
             mock_handler_class.assert_called_once()
-            assert mock_handler_class.call_args[1]["skip_users"] == ["user1", "user2"]
+            assert mock_handler_class.call_args[1]["skip_users"] == "^bot-"
 
     @pytest.mark.asyncio
     async def test_event_handler_main_with_templates_dir(self, mock_args, tmp_path: Path):
@@ -425,7 +425,7 @@ class TestEventHandlerCommand:
             assert args.fetch_timeout == 10.0
 
     def test_event_handler_function_with_skip_users(self, tmp_path: Path):
-        """Test event_handler function with skip_users list."""
+        """Test event_handler function with skip_users pattern."""
         with (
             patch(
                 "github_monitor.cli.event_handler.event_handler_main", new_callable=AsyncMock, return_value=0
@@ -434,10 +434,10 @@ class TestEventHandlerCommand:
         ):
             event_handler(
                 path=tmp_path,
-                skip_users=["bot1", "bot2"],
+                skip_users="^bot-",
             )
             args = mock_main.call_args[0][0]
-            assert args.skip_users == ["bot1", "bot2"]
+            assert args.skip_users == "^bot-"
 
     def test_event_handler_function_with_recreate_consumer(self, tmp_path: Path):
         """Test event_handler function with recreate_consumer flag."""

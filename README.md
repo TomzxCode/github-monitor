@@ -96,8 +96,8 @@ github-monitor event-handler /path/to/data
 # With custom templates directory
 github-monitor event-handler /path/to/data --templates-dir /path/to/templates
 
-# Skip events from specific users
-github-monitor event-handler /path/to/data --skip-users bot-user1 bot-user2
+# Skip events from users matching regex pattern
+github-monitor event-handler /path/to/data --skip-users "^(dependabot|renovate)"
 ```
 
 ## Commands
@@ -150,7 +150,7 @@ github-monitor event-handler PATH [OPTIONS]
 - `--consumer`: Durable consumer name (default: `github-event-handler`)
 - `--batch-size`: Number of messages to fetch per batch (default: 10)
 - `--fetch-timeout`: Timeout in seconds for fetching messages (default: 5.0)
-- `--skip-users`: List of usernames to skip event handling for
+- `--skip-users`: Regex pattern to match usernames to skip event handling for
 - `--recreate-consumer`: Delete and recreate the consumer (useful for reprocessing all messages)
 - `--claude-verbose`: Print raw Claude CLI output directly to stdout
 - `--auto-confirm`: Automatically process events without confirmation (default: false)
@@ -160,8 +160,8 @@ github-monitor event-handler PATH [OPTIONS]
 # Run with templates and auto-confirm
 github-monitor event-handler ./data --templates-dir ./templates --auto-confirm
 
-# Skip events from bots
-github-monitor event-handler ./data --skip-users dependabot renovate-bot
+# Skip events from users matching regex pattern (e.g., bots)
+github-monitor event-handler ./data --skip-users "^(dependabot|renovate)"
 
 # Reprocess all events from the beginning
 github-monitor event-handler ./data --recreate-consumer

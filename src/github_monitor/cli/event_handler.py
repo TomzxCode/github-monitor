@@ -131,7 +131,7 @@ def event_handler(
     batch_size: Annotated[int, cyclopts.Parameter(help="Number of messages to fetch per batch")] = 10,
     fetch_timeout: Annotated[float, cyclopts.Parameter(help="Timeout in seconds for fetching messages")] = 5.0,
     skip_users: Annotated[
-        list[str] | None, cyclopts.Parameter(help="List of usernames to skip event handling for")
+        str | None, cyclopts.Parameter(help="Regex pattern to match usernames to skip event handling for")
     ] = None,
     recreate_consumer: Annotated[
         bool, cyclopts.Parameter(help="Delete and recreate the consumer (useful for reprocessing all messages)")
@@ -160,7 +160,7 @@ def event_handler(
     args.consumer = consumer
     args.batch_size = batch_size
     args.fetch_timeout = fetch_timeout
-    args.skip_users = skip_users or []
+    args.skip_users = skip_users
     args.recreate_consumer = recreate_consumer
     args.claude_verbose = claude_verbose
     args.auto_confirm = auto_confirm

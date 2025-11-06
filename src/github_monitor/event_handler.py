@@ -18,6 +18,7 @@ Directory structure: {base_path}/{owner}/{repo}/{issue_or_pr_number}/
 """
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -270,18 +271,21 @@ class EventHandler:
         base_path: Path,
         claude_available: bool = True,
         templates_dir: Path | None = None,
-        skip_users: list[str] | None = None,
+        skip_users: str | None = None,
         claude_verbose: bool = False,
     ):
         self.base_path = base_path
         self.claude_available = claude_available
         self.templates_dir = templates_dir
-        self.skip_users = set(skip_users) if skip_users else set()
+        # Compile regex pattern from skip_users string
+        self.skip_user_pattern = re.compile(skip_users) if skip_users else None
         self.claude_verbose = claude_verbose
 
     def _should_skip_user(self, username: str) -> bool:
-        """Check if events from this user should be skipped."""
-        return username in self.skip_users
+        """Check if events from this user should be skipped using regex pattern."""
+        if self.skip_user_pattern is None:
+            return False
+        return self.skip_user_pattern.search(username) is not None
 
     def _invoke_claude_with_template(
         self, repository: str, number: str | int, event_name: str, log_prefix: str

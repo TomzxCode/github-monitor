@@ -168,7 +168,7 @@ class TestEventHandler:
 
     async def test_handle_new_issue_skip_user(self, tmp_path: Path) -> None:
         """Test skipping new issue from filtered user."""
-        handler = EventHandler(base_path=tmp_path, claude_available=False, skip_users=["bot-user"])
+        handler = EventHandler(base_path=tmp_path, claude_available=False, skip_users="^bot-")
         data = {"repository": "owner1/repo1", "number": 123, "author": "bot-user"}
 
         await handler.handle_new_issue(data)
@@ -192,7 +192,7 @@ class TestEventHandler:
 
     async def test_handle_closed_issue_skip_user(self, tmp_path: Path) -> None:
         """Test skipping closed issue from filtered user."""
-        handler = EventHandler(base_path=tmp_path, claude_available=False, skip_users=["bot-user"])
+        handler = EventHandler(base_path=tmp_path, claude_available=False, skip_users="^bot-")
 
         # Setup: create issue directory with .active file
         issue_dir = tmp_path / "owner1" / "repo1" / "123"
@@ -276,7 +276,7 @@ class TestEventHandler:
 
     def test_should_skip_user(self, tmp_path: Path) -> None:
         """Test user filtering logic."""
-        handler = EventHandler(base_path=tmp_path, claude_available=False, skip_users=["bot1", "bot2"])
+        handler = EventHandler(base_path=tmp_path, claude_available=False, skip_users="^bot[12]$")
 
         assert handler._should_skip_user("bot1") is True
         assert handler._should_skip_user("bot2") is True
