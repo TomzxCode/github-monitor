@@ -45,6 +45,8 @@ uv pip install -e .
 
 ## Configuration
 
+### Environment Variables
+
 Create a `.env` file in the project root with your GitHub token:
 
 ```bash
@@ -62,6 +64,26 @@ To create a GitHub Personal Access Token:
 2. Click "Generate new token"
 3. Select scopes: `repo` (for private repositories) or `public_repo` (for public repositories only)
 4. Copy the generated token
+
+### YAML Configuration Files
+
+You can now use YAML configuration files to store your settings instead of passing command-line arguments each time. See [CONFIG.md](CONFIG.md) for detailed documentation.
+
+Example configuration files are provided in the `examples/` directory:
+- `examples/config-monitor.yaml` - For the monitor command
+- `examples/config-event-handler.yaml` - For the event-handler command
+- `examples/config-pr-comment.yaml` - For the pr-comment command
+
+**Usage:**
+```bash
+# Use a configuration file
+github-monitor monitor --config examples/config-monitor.yaml
+
+# Override specific values from config
+github-monitor monitor --config examples/config-monitor.yaml --dry-run --interval 10m
+```
+
+CLI arguments always take precedence over configuration file values.
 
 ## Quick Start
 

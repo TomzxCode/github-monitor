@@ -10,6 +10,7 @@ import cyclopts
 from nats.aio.client import Client as NATS
 from nats.js.api import ConsumerConfig, DeliverPolicy
 
+from github_monitor.cli.config_loader import load_config, merge_config_with_defaults
 from github_monitor.event_handler import EventHandler, check_claude_installed, message_handler
 
 
@@ -125,20 +126,20 @@ async def event_handler_main(args):
 
 
 def event_handler(
-    path: Annotated[Path, cyclopts.Parameter(help="Base path containing repository/issue_number directories")],
+    path: Annotated[Path | None, cyclopts.Parameter(help="Base path containing repository/issue_number directories")] = None,
     templates_dir: Annotated[
         Path | None, cyclopts.Parameter(help="Templates directory containing markdown files for event handlers")
     ] = None,
-    nats_server: Annotated[str, cyclopts.Parameter(help="NATS server URL")] = "nats://localhost:4222",
-    stream: Annotated[str, cyclopts.Parameter(help="JetStream stream name")] = "GITHUB_EVENTS",
-    consumer: Annotated[str, cyclopts.Parameter(help="Durable consumer name")] = "github-event-handler",
-    batch_size: Annotated[int, cyclopts.Parameter(help="Number of messages to fetch per batch")] = 10,
+    nats_server: Annotated[str | None, cyclopts.Parameter(help="NATS server URL")] = None,
+    stream: Annotated[str | None, cyclopts.Parameter(help="JetStream stream name")] = None,
+    consumer: Annotated[str | None, cyclopts.Parameter(help="Durable consumer name")] = None,
+    batch_size: Annotated[int | None, cyclopts.Parameter(help="Number of messages to fetch per batch")] = None,
     fetch_timeout: Annotated[
-        timedelta, cyclopts.Parameter(help="Timeout for fetching messages (format: AdBhCmDs, e.g., 5s, 30s)")
-    ] = timedelta(seconds=5),
+        timedelta | None, cyclopts.Parameter(help="Timeout for fetching messages (format: AdBhCmDs, e.g., 5s, 30s)")
+    ] = None,
     ack_wait: Annotated[
-        timedelta, cyclopts.Parameter(help="AckWait timeout for message processing (format: AdBhCmDs, e.g., 5m, 300s)")
-    ] = timedelta(seconds=300),
+        timedelta | None, cyclopts.Parameter(help="AckWait timeout for message processing (format: AdBhCmDs, e.g., 5m, 300s)")
+    ] = None,
     skip_users: Annotated[
         str | None, cyclopts.Parameter(help="Regex pattern to match usernames to skip event handling for")
     ] = None,
@@ -150,38 +151,94 @@ def event_handler(
         ),
     ] = None,
     recreate_consumer: Annotated[
-        bool, cyclopts.Parameter(help="Delete and recreate the consumer (useful for reprocessing all messages)")
-    ] = False,
+        bool | None, cyclopts.Parameter(help="Delete and recreate the consumer (useful for reprocessing all messages)")
+    ] = None,
     claude_verbose: Annotated[
-        bool, cyclopts.Parameter(help="Print raw Claude CLI output directly to stdout instead of parsing JSONL")
-    ] = False,
+        bool | None, cyclopts.Parameter(help="Print raw Claude CLI output directly to stdout instead of parsing JSONL")
+    ] = None,
     auto_confirm: Annotated[
-        bool,
+        bool | None,
         cyclopts.Parameter(
             help="Automatically process events without confirmation. If not set, prompts after each event."
         ),
-    ] = False,
+    ] = None,
+    config: Annotated[
+        Path | None,
+        cyclopts.Parameter(help="Path to YAML configuration file. CLI arguments override config file values."),
+    ] = None,
 ):
     """Handle GitHub issue and PR events from NATS JetStream."""
+
+    # Load configuration from file if provided
+    if config:
+        file_config = load_config(config)
+    else:
+        file_config = {}
+
+    # Merge with CLI arguments (CLI takes precedence)
+    cli_values = {
+        "path": path,
+        "templates_dir": templates_dir,
+        "nats_server": nats_server,
+        "stream": stream,
+        "consumer": consumer,
+        "batch_size": batch_size,
+        "fetch_timeout": fetch_timeout,
+        "ack_wait": ack_wait,
+        "skip_users": skip_users,
+        "repositories": repositories,
+        "recreate_consumer": recreate_consumer,
+        "claude_verbose": claude_verbose,
+        "auto_confirm": auto_confirm,
+    }
+    merged_config = merge_config_with_defaults(file_config, cli_values)
+
+    # Apply defaults for any missing values
+    final_path = merged_config.get("path")
+    if final_path is None:
+        print("Error: path is required (via --path or in config file)", file=sys.stderr)
+        sys.exit(1)
+    final_path = Path(final_path)
+
+    final_templates_dir = merged_config.get("templates_dir")
+    if final_templates_dir is not None:
+        final_templates_dir = Path(final_templates_dir)
+
+    final_nats_server = merged_config.get("nats_server", "nats://localhost:4222")
+    final_stream = merged_config.get("stream", "GITHUB_EVENTS")
+    final_consumer = merged_config.get("consumer", "github-event-handler")
+    final_batch_size = merged_config.get("batch_size", 10)
+    final_recreate_consumer = merged_config.get("recreate_consumer", False)
+    final_claude_verbose = merged_config.get("claude_verbose", False)
+    final_auto_confirm = merged_config.get("auto_confirm", False)
+
+    # Handle timedelta values - could be strings from config or timedelta from CLI
+    final_fetch_timeout = merged_config.get("fetch_timeout", timedelta(seconds=5))
+    if isinstance(final_fetch_timeout, str):
+        final_fetch_timeout = parse_duration_to_timedelta(final_fetch_timeout)
+
+    final_ack_wait = merged_config.get("ack_wait", timedelta(seconds=300))
+    if isinstance(final_ack_wait, str):
+        final_ack_wait = parse_duration_to_timedelta(final_ack_wait)
 
     # Create args object with parsed values
     class Args:
         pass
 
     args = Args()
-    args.path = path
-    args.templates_dir = templates_dir
-    args.nats_server = nats_server
-    args.stream = stream
-    args.consumer = consumer
-    args.batch_size = batch_size
-    args.fetch_timeout = fetch_timeout
-    args.ack_wait = ack_wait
-    args.skip_users = skip_users
-    args.repositories = repositories
-    args.recreate_consumer = recreate_consumer
-    args.claude_verbose = claude_verbose
-    args.auto_confirm = auto_confirm
+    args.path = final_path
+    args.templates_dir = final_templates_dir
+    args.nats_server = final_nats_server
+    args.stream = final_stream
+    args.consumer = final_consumer
+    args.batch_size = final_batch_size
+    args.fetch_timeout = final_fetch_timeout
+    args.ack_wait = final_ack_wait
+    args.skip_users = merged_config.get("skip_users")
+    args.repositories = merged_config.get("repositories")
+    args.recreate_consumer = final_recreate_consumer
+    args.claude_verbose = final_claude_verbose
+    args.auto_confirm = final_auto_confirm
 
     # Run async main
     try:
@@ -190,3 +247,39 @@ def event_handler(
     except KeyboardInterrupt:
         print("\nExiting...")
         sys.exit(0)
+
+
+def parse_duration_to_timedelta(duration_str: str) -> timedelta:
+    """Parse duration string like '5m', '1h30m', '2d' to timedelta.
+
+    Args:
+        duration_str: Duration string
+
+    Returns:
+        timedelta object
+    """
+    import re
+
+    if not duration_str:
+        return timedelta(seconds=5)
+
+    total_seconds = 0
+    # Pattern matches: number followed by unit (d, h, m, s)
+    pattern = r"(\d+)([dhms])"
+    matches = re.findall(pattern, duration_str.lower())
+
+    if not matches:
+        return timedelta(seconds=5)
+
+    for value, unit in matches:
+        value = int(value)
+        if unit == "d":
+            total_seconds += value * 86400
+        elif unit == "h":
+            total_seconds += value * 3600
+        elif unit == "m":
+            total_seconds += value * 60
+        elif unit == "s":
+            total_seconds += value
+
+    return timedelta(seconds=total_seconds if total_seconds > 0 else 5)

@@ -1,0 +1,27 @@
+# GitHub PR Comment Configuration File
+# This configuration file can be used with: github-monitor pr-comment --config config-pr-comment.yaml
+# CLI arguments will override values specified in this file.
+
+# Repository name in format 'owner/repo'
+repo: "owner/repo"
+
+# Pull request number
+pr_number: 123
+
+# Comment body text
+comment: "This looks good!"
+
+# File path for line comment (required for line-specific comments)
+# Example: "src/main.py"
+file: null
+
+# Line number for line comment (required for line-specific comments)
+line: null
+
+# GitHub token (or use GITHUB_TOKEN environment variable)
+token: null
+
+# Submit a review with event: approve, request_changes, or comment
+# Only applicable when creating line comments (file and line must be specified)
+# Options: "approve", "request_changes", "comment"
+submit: null

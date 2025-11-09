@@ -2,7 +2,7 @@
 
 import os
 import sys
-from typing import Any, Optional
+from typing import Any
 
 import requests
 from dotenv import load_dotenv
@@ -15,7 +15,7 @@ load_dotenv()
 class GitHubGraphQLClient:
     """Client for making GraphQL requests to GitHub API."""
 
-    def __init__(self, token: Optional[str] = None):
+    def __init__(self, token: str | None = None):
         """
         Initialize the GitHub GraphQL client.
 
@@ -35,7 +35,7 @@ class GitHubGraphQLClient:
             "Content-Type": "application/json",
         }
 
-    def execute(self, query: str, variables: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    def execute(self, query: str, variables: dict[str, Any] | None = None) -> dict[str, Any]:
         """
         Execute a GraphQL query.
 
@@ -78,10 +78,10 @@ class GitHubGraphQLClient:
 
 
 # Global client instance (will be initialized on first use)
-_github_client: Optional[GitHubGraphQLClient] = None
+_github_client: GitHubGraphQLClient | None = None
 
 
-def get_github_client(token: Optional[str] = None) -> GitHubGraphQLClient:
+def get_github_client(token: str | None = None) -> GitHubGraphQLClient:
     """
     Get or create the global GitHub GraphQL client instance.
 

@@ -29,7 +29,6 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 import requests
 from dotenv import load_dotenv
@@ -37,57 +36,15 @@ from nats.aio.client import Client as NATS
 from nats.js.api import DiscardPolicy, RetentionPolicy, StreamConfig
 
 from github_monitor.github_client import get_github_client
+from github_monitor.utils import parse_duration_to_timedelta
 
 
 # Load environment variables from .env file
 load_dotenv()
 
 
-def parse_duration(duration_str: str) -> int:
-    """
-    Parse a duration string in the format AdBhCmDs (e.g., 5m, 1h30m, 2d).
-
-    Args:
-        duration_str: Duration string with format like "5m", "1h30m", "2d12h", etc.
-                     Supports: d (days), h (hours), m (minutes), s (seconds)
-
-    Returns:
-        Total duration in seconds
-
-    Raises:
-        ValueError: If the format is invalid
-    """
-    if not duration_str:
-        raise ValueError("Duration string cannot be empty")
-
-    # Pattern to match duration components
-    pattern = r"(\d+)([dhms])"
-    matches = re.findall(pattern, duration_str.lower())
-
-    if not matches:
-        raise ValueError(f"Invalid duration format: {duration_str}. Expected format like '5m', '1h30m', '2d', etc.")
-
-    # Check if the entire string was consumed
-    reconstructed = "".join(f"{num}{unit}" for num, unit in matches)
-    if reconstructed != duration_str.lower():
-        raise ValueError(f"Invalid duration format: {duration_str}. Expected format like '5m', '1h30m', '2d', etc.")
-
-    total_seconds = 0
-    units = {
-        "d": 86400,  # days
-        "h": 3600,  # hours
-        "m": 60,  # minutes
-        "s": 1,  # seconds
-    }
-
-    for value, unit in matches:
-        total_seconds += int(value) * units[unit]
-
-    return total_seconds
-
-
 def find_active_issues(
-    base_path: Path, active_only: bool = True, repositories: Optional[list[str]] = None
+    base_path: Path, active_only: bool = True, repositories: list[str] | None = None
 ) -> list[tuple[str, str]]:
     """
     Find all active issues and PRs by scanning directories.
@@ -145,7 +102,7 @@ def find_active_issues(
     return active_issues
 
 
-def _build_issue_query(owner: str, repo: str, filter_clause: str, cursor: Optional[str] = None) -> str:
+def _build_issue_query(owner: str, repo: str, filter_clause: str, cursor: str | None = None) -> str:
     """Build GraphQL query for fetching issues."""
     after_clause = f', after: "{cursor}"' if cursor else ""
     return f"""
@@ -185,7 +142,7 @@ def _build_issue_query(owner: str, repo: str, filter_clause: str, cursor: Option
     """
 
 
-def _build_pr_query(owner: str, repo: str, filter_clause: str, cursor: Optional[str] = None) -> str:
+def _build_pr_query(owner: str, repo: str, filter_clause: str, cursor: str | None = None) -> str:
     """Build GraphQL query for fetching pull requests."""
     after_clause = f', after: "{cursor}"' if cursor else ""
     return f"""
@@ -328,7 +285,7 @@ def _fetch_paginated_items(
     return items
 
 
-def get_open_issues(repository: str, updated_since: Optional[str] = None) -> dict[str, dict]:
+def get_open_issues(repository: str, updated_since: str | None = None) -> dict[str, dict]:
     """
     Get the list of open issues and pull requests from GitHub using GraphQL API.
 
@@ -398,7 +355,7 @@ def get_tracked_repositories(base_path: Path) -> list[str]:
     return repositories
 
 
-def get_last_comment_check(base_path: Path, repository: str, issue_number: str) -> Optional[str]:
+def get_last_comment_check(base_path: Path, repository: str, issue_number: str) -> str | None:
     """
     Get the timestamp of the last comment check for an issue or PR.
 
@@ -447,7 +404,7 @@ def save_last_comment_check(
         print(f"Error writing timestamp file {timestamp_file}: {e}", file=sys.stderr)
 
 
-def get_last_checked(base_path: Path, repository: str, issue_number: str) -> Optional[str]:
+def get_last_checked(base_path: Path, repository: str, issue_number: str) -> str | None:
     """
     Get the timestamp of the last time an issue was monitored.
 
@@ -493,7 +450,7 @@ def save_last_checked(base_path: Path, repository: str, issue_number: str, times
         print(f"Error writing last checked file {timestamp_file}: {e}", file=sys.stderr)
 
 
-def _build_comment_query(owner: str, repo: str, number: str, item_type: str, cursor: Optional[str] = None) -> str:
+def _build_comment_query(owner: str, repo: str, number: str, item_type: str, cursor: str | None = None) -> str:
     """Build GraphQL query for fetching comments on issues or PRs."""
     after_clause = f', after: "{cursor}"' if cursor else ""
     type_name = "issue" if item_type == "issue" else "pullRequest"
@@ -570,7 +527,7 @@ def _parse_comment_node(comment: dict) -> dict:
 
 
 def _fetch_paginated_comments(
-    repository: str, number: str, item_type: str, updated_since: Optional[str] = None
+    repository: str, number: str, item_type: str, updated_since: str | None = None
 ) -> list[dict]:
     """
     Generic function to fetch paginated comments from GitHub GraphQL API.
@@ -626,7 +583,7 @@ def _fetch_paginated_comments(
         return []
 
 
-def get_issue_comments(repository: str, issue_number: str, updated_since: Optional[str] = None) -> list[dict]:
+def get_issue_comments(repository: str, issue_number: str, updated_since: str | None = None) -> list[dict]:
     """
     Get comments on an issue from GitHub using GraphQL API.
 
@@ -641,7 +598,7 @@ def get_issue_comments(repository: str, issue_number: str, updated_since: Option
     return _fetch_paginated_comments(repository, issue_number, "issue", updated_since)
 
 
-def get_type_from_file(base_path: Path, repository: str, number: str) -> Optional[str]:
+def get_type_from_file(base_path: Path, repository: str, number: str) -> str | None:
     """
     Get the type (issue or pr) from the .type file.
 
@@ -688,7 +645,7 @@ def save_type_to_file(base_path: Path, repository: str, number: str, type_value:
         print(f"Error writing type file {type_file}: {e}", file=sys.stderr)
 
 
-def is_pull_request(repository: str, number: str, base_path: Optional[Path] = None) -> bool:
+def is_pull_request(repository: str, number: str, base_path: Path | None = None) -> bool:
     """
     Check if a given number is a pull request.
 
@@ -735,7 +692,7 @@ def is_pull_request(repository: str, number: str, base_path: Optional[Path] = No
         return False
 
 
-def get_pr_comments(repository: str, pr_number: str, updated_since: Optional[str] = None) -> list[dict]:
+def get_pr_comments(repository: str, pr_number: str, updated_since: str | None = None) -> list[dict]:
     """
     Get comments on a pull request from GitHub using GraphQL API.
 
@@ -801,7 +758,7 @@ async def ensure_jetstream_stream(nc: NATS, stream_name: str = "GITHUB_EVENTS"):
         raise
 
 
-def get_repository_last_comment_check(base_path: Path, repository: str) -> Optional[str]:
+def get_repository_last_comment_check(base_path: Path, repository: str) -> str | None:
     """
     Get the earliest last comment check timestamp for all issues/PRs in a repository.
     This allows us to fetch all comments since the earliest check with a single query.
@@ -839,7 +796,7 @@ def get_repository_last_comment_check(base_path: Path, repository: str) -> Optio
 
 
 def get_all_repository_comments(
-    repository: str, item_type: str, updated_since: Optional[str] = None
+    repository: str, item_type: str, updated_since: str | None = None
 ) -> dict[str, list[dict]]:
     """
     Get all comments on issues or PRs in a repository using a single GraphQL query.
@@ -958,7 +915,7 @@ async def monitor_repositories(
     base_path: Path,
     repositories: list[str],
     dry_run: bool = False,
-    updated_since: Optional[str] = None,
+    updated_since: str | None = None,
 ) -> int:
     """
     Monitor repositories and publish events for new open issues and PRs.

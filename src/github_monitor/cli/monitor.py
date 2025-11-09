@@ -9,6 +9,7 @@ from typing import Annotated
 import cyclopts
 from nats.aio.client import Client as NATS
 
+from github_monitor.cli.config_loader import load_config, merge_config_with_defaults
 from github_monitor.monitor import (
     ensure_jetstream_stream,
     find_active_issues,
@@ -20,6 +21,7 @@ from github_monitor.monitor import (
     monitor_repositories,
     process_active_issues,
 )
+from github_monitor.utils import parse_duration_to_timedelta
 
 
 async def run_monitoring_cycle(args, nc, js):
@@ -178,34 +180,34 @@ async def monitor_main(args):
 
 
 def monitor(
-    path: Annotated[Path, cyclopts.Parameter(help="Base path containing repository/issue_number directories")],
+    path: Annotated[Path | None, cyclopts.Parameter(help="Base path containing repository/issue_number directories")] = None,
     repositories: Annotated[
         list[str] | None,
         cyclopts.Parameter(
             help="List of repositories to track (format: owner/repo). If not provided, uses existing directories."
         ),
     ] = None,
-    nats_server: Annotated[str, cyclopts.Parameter(help="NATS server URL")] = "nats://localhost:4222",
-    dry_run: Annotated[bool, cyclopts.Parameter(help="Show what would be done without making changes")] = False,
+    nats_server: Annotated[str | None, cyclopts.Parameter(help="NATS server URL")] = None,
+    dry_run: Annotated[bool | None, cyclopts.Parameter(help="Show what would be done without making changes")] = None,
     updated_since: Annotated[
         str | None,
         cyclopts.Parameter(help="Filter issues/PRs updated since this ISO8601 timestamp (e.g., 2024-01-01T00:00:00Z)"),
     ] = None,
     monitor_issues: Annotated[
-        bool, cyclopts.Parameter(help="Monitor and publish events for issues and PRs (new, updated, closed)")
-    ] = True,
+        bool | None, cyclopts.Parameter(help="Monitor and publish events for issues and PRs (new, updated, closed)")
+    ] = None,
     monitor_issue_comments: Annotated[
-        bool, cyclopts.Parameter(help="Monitor and publish events for new comments on active issues")
-    ] = True,
+        bool | None, cyclopts.Parameter(help="Monitor and publish events for new comments on active issues")
+    ] = None,
     monitor_pr_comments: Annotated[
-        bool, cyclopts.Parameter(help="Monitor and publish events for new comments on active pull requests")
-    ] = True,
+        bool | None, cyclopts.Parameter(help="Monitor and publish events for new comments on active pull requests")
+    ] = None,
     active_only: Annotated[
-        bool,
+        bool | None,
         cyclopts.Parameter(
             help="Only monitor issues/PRs with .active flag. Use --no-active-only to monitor all directories."
         ),
-    ] = True,
+    ] = None,
     interval: Annotated[
         timedelta | None,
         cyclopts.Parameter(
@@ -215,24 +217,74 @@ def monitor(
             )
         ),
     ] = None,
+    config: Annotated[
+        Path | None,
+        cyclopts.Parameter(help="Path to YAML configuration file. CLI arguments override config file values."),
+    ] = None,
 ):
     """Monitor GitHub issues and publish events to NATS."""
+
+    # Load configuration from file if provided
+    if config:
+        file_config = load_config(config)
+    else:
+        file_config = {}
+
+    # Merge with CLI arguments (CLI takes precedence)
+    cli_values = {
+        "path": path,
+        "repositories": repositories,
+        "nats_server": nats_server,
+        "dry_run": dry_run,
+        "updated_since": updated_since,
+        "monitor_issues": monitor_issues,
+        "monitor_issue_comments": monitor_issue_comments,
+        "monitor_pr_comments": monitor_pr_comments,
+        "active_only": active_only,
+        "interval": interval,
+    }
+    merged_config = merge_config_with_defaults(file_config, cli_values)
+
+    # Apply defaults for any missing values
+    final_path = merged_config.get("path")
+    if final_path is None:
+        print("Error: path is required (via --path or in config file)", file=sys.stderr)
+        sys.exit(1)
+    final_path = Path(final_path)
+
+    final_nats_server = merged_config.get("nats_server", "nats://localhost:4222")
+    final_dry_run = merged_config.get("dry_run", False)
+    final_monitor_issues = merged_config.get("monitor_issues", True)
+    final_monitor_issue_comments = merged_config.get("monitor_issue_comments", True)
+    final_monitor_pr_comments = merged_config.get("monitor_pr_comments", True)
+    final_active_only = merged_config.get("active_only", True)
+
+    # Handle interval - could be a string from config or timedelta from CLI
+    final_interval = merged_config.get("interval")
+    if isinstance(final_interval, str):
+        if config is None:
+            raise AttributeError(f"interval must be a timedelta, not str. Received: '{final_interval}'")
+        final_interval = parse_duration_to_timedelta(final_interval).total_seconds()
+    elif isinstance(final_interval, timedelta):
+        final_interval = final_interval.total_seconds()
+    elif final_interval is not None:
+        raise AttributeError(f"interval must be a timedelta or string, not {type(final_interval).__name__}")
 
     # Create args object with parsed values
     class Args:
         pass
 
     args = Args()
-    args.path = path
-    args.repositories = repositories
-    args.nats_server = nats_server
-    args.dry_run = dry_run
-    args.updated_since = updated_since
-    args.monitor_issues = monitor_issues
-    args.monitor_issue_comments = monitor_issue_comments
-    args.monitor_pr_comments = monitor_pr_comments
-    args.active_only = active_only
-    args.interval = interval.total_seconds() if interval else None
+    args.path = final_path
+    args.repositories = merged_config.get("repositories")
+    args.nats_server = final_nats_server
+    args.dry_run = final_dry_run
+    args.updated_since = merged_config.get("updated_since")
+    args.monitor_issues = final_monitor_issues
+    args.monitor_issue_comments = final_monitor_issue_comments
+    args.monitor_pr_comments = final_monitor_pr_comments
+    args.active_only = final_active_only
+    args.interval = final_interval
 
     # Check that GitHub token is available
     try:

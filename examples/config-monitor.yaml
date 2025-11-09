@@ -1,0 +1,40 @@
+# GitHub Monitor Configuration File
+# This configuration file can be used with: github-monitor monitor --config config-monitor.yaml
+# CLI arguments will override values specified in this file.
+
+# Base path containing repository/issue_number directories
+path: "./issues"
+
+# List of repositories to track (format: owner/repo)
+# If not provided, uses existing directories
+repositories:
+  - "owner/repo1"
+  - "owner/repo2"
+
+# NATS server URL
+nats_server: "nats://localhost:4222"
+
+# Show what would be done without making changes
+dry_run: false
+
+# Filter issues/PRs updated since this ISO8601 timestamp
+# Example: "2024-01-01T00:00:00Z"
+updated_since: null
+
+# Monitor and publish events for issues and PRs (new, updated, closed)
+monitor_issues: true
+
+# Monitor and publish events for new comments on active issues
+monitor_issue_comments: true
+
+# Monitor and publish events for new comments on active pull requests
+monitor_pr_comments: true
+
+# Only monitor issues/PRs with .active flag
+# Set to false to monitor all directories
+active_only: true
+
+# Run monitoring at this interval (format: AdBhCmDs, e.g., 5m, 1h30m, 2d)
+# If not specified, runs once and exits
+# Examples: "5m", "1h30m", "2d", "30s"
+interval: null

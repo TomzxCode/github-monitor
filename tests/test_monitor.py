@@ -11,60 +11,10 @@ from github_monitor.monitor import (
     get_last_comment_check,
     get_tracked_repositories,
     get_type_from_file,
-    parse_duration,
     save_last_checked,
     save_last_comment_check,
     save_type_to_file,
 )
-
-
-class TestParseDuration:
-    """Tests for parse_duration function."""
-
-    def test_parse_seconds(self) -> None:
-        """Test parsing seconds."""
-        assert parse_duration("30s") == 30
-        assert parse_duration("1s") == 1
-
-    def test_parse_minutes(self) -> None:
-        """Test parsing minutes."""
-        assert parse_duration("5m") == 300
-        assert parse_duration("1m") == 60
-
-    def test_parse_hours(self) -> None:
-        """Test parsing hours."""
-        assert parse_duration("1h") == 3600
-        assert parse_duration("2h") == 7200
-
-    def test_parse_days(self) -> None:
-        """Test parsing days."""
-        assert parse_duration("1d") == 86400
-        assert parse_duration("2d") == 172800
-
-    def test_parse_combined(self) -> None:
-        """Test parsing combined duration strings."""
-        assert parse_duration("1h30m") == 5400
-        assert parse_duration("1d12h") == 129600
-        assert parse_duration("2d5h30m15s") == 192615
-
-    def test_parse_empty_string(self) -> None:
-        """Test that empty string raises ValueError."""
-        with pytest.raises(ValueError, match="Duration string cannot be empty"):
-            parse_duration("")
-
-    def test_parse_invalid_format(self) -> None:
-        """Test that invalid format raises ValueError."""
-        with pytest.raises(ValueError, match="Invalid duration format"):
-            parse_duration("abc")
-        with pytest.raises(ValueError, match="Invalid duration format"):
-            parse_duration("5")
-        with pytest.raises(ValueError, match="Invalid duration format"):
-            parse_duration("5x")
-
-    def test_parse_partial_invalid(self) -> None:
-        """Test that partially invalid strings raise ValueError."""
-        with pytest.raises(ValueError, match="Invalid duration format"):
-            parse_duration("5m abc")
 
 
 class TestFindActiveIssues:

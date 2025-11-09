@@ -1,0 +1,48 @@
+# GitHub Event Handler Configuration File
+# This configuration file can be used with: github-monitor event-handler --config config-event-handler.yaml
+# CLI arguments will override values specified in this file.
+
+# Base path containing repository/issue_number directories
+path: "./issues"
+
+# Templates directory containing markdown files for event handlers
+# If not specified, uses default templates
+templates_dir: null
+
+# NATS server URL
+nats_server: "nats://localhost:4222"
+
+# JetStream stream name
+stream: "GITHUB_EVENTS"
+
+# Durable consumer name
+consumer: "github-event-handler"
+
+# Number of messages to fetch per batch
+batch_size: 10
+
+# Timeout for fetching messages (format: AdBhCmDs, e.g., 5s, 30s)
+fetch_timeout: "5s"
+
+# AckWait timeout for message processing (format: AdBhCmDs, e.g., 5m, 300s)
+# This should be long enough for Claude to process events
+ack_wait: "300s"
+
+# Regex pattern to match usernames to skip event handling for
+# Example: "bot|github-actions|dependabot"
+skip_users: null
+
+# Regex pattern to filter repositories
+# Only matching repositories will be processed
+# Examples: "owner/repo", ".*my-org.*"
+repositories: null
+
+# Delete and recreate the consumer (useful for reprocessing all messages)
+recreate_consumer: false
+
+# Print raw Claude CLI output directly to stdout instead of parsing JSONL
+claude_verbose: false
+
+# Automatically process events without confirmation
+# If false, prompts after each event
+auto_confirm: false
