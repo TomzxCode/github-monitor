@@ -176,6 +176,7 @@ github-monitor event-handler PATH [OPTIONS]
 - `--batch-size`: Number of messages to fetch per batch (default: 10)
 - `--fetch-timeout`: Timeout in seconds for fetching messages (default: 5.0)
 - `--ack-wait`: AckWait timeout in seconds for message processing (default: 300)
+- `--max-concurrent`: Maximum number of events to process concurrently (default: 5). Set to 1 for sequential processing
 - `--skip-users`: Regex pattern to match usernames to skip event handling for
 - `--recreate-consumer`: Delete and recreate the consumer (useful for reprocessing all messages)
 - `--claude-verbose`: Print raw Claude CLI output directly to stdout
@@ -185,6 +186,12 @@ github-monitor event-handler PATH [OPTIONS]
 ```bash
 # Run with templates and auto-confirm
 github-monitor event-handler ./data --templates-dir ./templates --auto-confirm
+
+# Process up to 10 events in parallel for faster response times
+github-monitor event-handler ./data --max-concurrent 10
+
+# Use sequential processing (useful when order matters or for debugging)
+github-monitor event-handler ./data --max-concurrent 1
 
 # Skip events from users matching regex pattern (e.g., bots)
 github-monitor event-handler ./data --skip-users "^(dependabot|renovate)"

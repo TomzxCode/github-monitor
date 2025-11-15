@@ -42,6 +42,12 @@ uv run github-monitor event-handler /path/to/data --templates-dir /path/to/templ
 # Adjust AckWait timeout for very long Claude operations (default is 300 seconds)
 uv run github-monitor event-handler /path/to/data --templates-dir /path/to/templates --ack-wait 600
 
+# Process events in parallel (default is 5 concurrent events)
+uv run github-monitor event-handler /path/to/data --templates-dir /path/to/templates --max-concurrent 10
+
+# Use sequential processing for debugging or when order matters
+uv run github-monitor event-handler /path/to/data --templates-dir /path/to/templates --max-concurrent 1
+
 # Dry run (see what would happen without making changes)
 uv run github-monitor monitor /path/to/data --repositories owner/repo --dry-run
 
@@ -184,6 +190,18 @@ Since Claude CLI invocations can take longer than the default NATS AckWait timeo
 2. **In-Progress Signaling**: During Claude CLI execution, the system sends periodic `msg.in_progress()` signals every 20 seconds to extend the acknowledgment deadline, preventing message redelivery while processing is ongoing
 
 This combination ensures that even lengthy Claude operations complete successfully without timing out or causing duplicate processing.
+
+### Parallel Event Processing
+
+The event handler supports parallel processing of events to improve response times when multiple events arrive simultaneously:
+
+1. **Concurrent Processing**: Events are processed in parallel using `asyncio.gather()` with a configurable concurrency limit
+2. **Semaphore-Based Control**: An `asyncio.Semaphore` limits the number of concurrent operations to prevent resource exhaustion
+3. **Configurable Concurrency**: The `--max-concurrent` parameter controls how many events can be processed simultaneously (default: 5)
+4. **Sequential Fallback**: Setting `--max-concurrent 1` enables sequential processing for debugging or when order matters
+5. **Error Isolation**: Each event is processed independently, so failures in one event don't affect others
+
+The parallel processing implementation assumes that events are independent from one another and can be safely processed concurrently. This significantly improves response times when handling multiple events, especially when event handlers involve time-consuming operations like Claude CLI invocations.
 
 # MUST DO
 

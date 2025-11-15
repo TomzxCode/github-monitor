@@ -180,7 +180,9 @@ async def monitor_main(args):
 
 
 def monitor(
-    path: Annotated[Path | None, cyclopts.Parameter(help="Base path containing repository/issue_number directories")] = None,
+    path: Annotated[
+        Path | None, cyclopts.Parameter(help="Base path containing repository/issue_number directories")
+    ] = None,
     repositories: Annotated[
         list[str] | None,
         cyclopts.Parameter(

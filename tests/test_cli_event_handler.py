@@ -24,6 +24,7 @@ class TestEventHandlerCommand:
         args.batch_size = 10
         args.fetch_timeout = timedelta(seconds=5)
         args.ack_wait = timedelta(seconds=300)
+        args.max_concurrent = 5
         args.skip_users = None
         args.recreate_consumer = False
         args.claude_verbose = False
@@ -485,3 +486,113 @@ class TestEventHandlerCommand:
             )
             args = mock_main.call_args[0][0]
             assert args.auto_confirm is True
+
+    def test_event_handler_function_with_max_concurrent(self, tmp_path: Path):
+        """Test event_handler function with max_concurrent parameter."""
+        with (
+            patch(
+                "github_monitor.cli.event_handler.event_handler_main", new_callable=AsyncMock, return_value=0
+            ) as mock_main,
+            patch("sys.exit"),
+        ):
+            event_handler(
+                path=tmp_path,
+                max_concurrent=10,
+            )
+            args = mock_main.call_args[0][0]
+            assert args.max_concurrent == 10
+
+    def test_event_handler_function_with_max_concurrent_default(self, tmp_path: Path):
+        """Test event_handler function uses default max_concurrent=5."""
+        with (
+            patch(
+                "github_monitor.cli.event_handler.event_handler_main", new_callable=AsyncMock, return_value=0
+            ) as mock_main,
+            patch("sys.exit"),
+        ):
+            event_handler(path=tmp_path)
+            args = mock_main.call_args[0][0]
+            assert args.max_concurrent == 5
+
+    @pytest.mark.asyncio
+    async def test_event_handler_main_parallel_processing(self, mock_args):
+        """Test that event_handler_main processes messages in parallel when max_concurrent > 1."""
+        mock_args.max_concurrent = 3
+        mock_nc = MagicMock()
+        mock_nc.is_connected = True
+        mock_nc.connect = AsyncMock()
+        mock_nc.close = AsyncMock()
+        mock_js = MagicMock()
+        mock_psub = MagicMock()
+        mock_msg1 = MagicMock()
+        mock_msg2 = MagicMock()
+        mock_msg3 = MagicMock()
+
+        call_count = 0
+
+        async def fetch_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return [mock_msg1, mock_msg2, mock_msg3]
+            raise KeyboardInterrupt
+
+        mock_psub.fetch = AsyncMock(side_effect=fetch_side_effect)
+        mock_consumer_info = Mock()
+        mock_consumer_info.num_pending = 3
+
+        with (
+            patch("github_monitor.cli.event_handler.NATS", return_value=mock_nc),
+            patch("github_monitor.cli.event_handler.check_claude_installed", return_value=True),
+            patch("github_monitor.cli.event_handler.EventHandler"),
+            patch("github_monitor.cli.event_handler.message_handler", new_callable=AsyncMock) as mock_handler,
+        ):
+            mock_nc.jetstream.return_value = mock_js
+            mock_js.consumer_info = AsyncMock(return_value=mock_consumer_info)
+            mock_js.pull_subscribe = AsyncMock(return_value=mock_psub)
+
+            result = await event_handler_main(mock_args)
+            assert result == 0
+            # Should be called 3 times (once for each message)
+            assert mock_handler.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_event_handler_main_sequential_processing(self, mock_args):
+        """Test that event_handler_main processes messages sequentially when max_concurrent = 1."""
+        mock_args.max_concurrent = 1
+        mock_nc = MagicMock()
+        mock_nc.is_connected = True
+        mock_nc.connect = AsyncMock()
+        mock_nc.close = AsyncMock()
+        mock_js = MagicMock()
+        mock_psub = MagicMock()
+        mock_msg1 = MagicMock()
+        mock_msg2 = MagicMock()
+
+        call_count = 0
+
+        async def fetch_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return [mock_msg1, mock_msg2]
+            raise KeyboardInterrupt
+
+        mock_psub.fetch = AsyncMock(side_effect=fetch_side_effect)
+        mock_consumer_info = Mock()
+        mock_consumer_info.num_pending = 2
+
+        with (
+            patch("github_monitor.cli.event_handler.NATS", return_value=mock_nc),
+            patch("github_monitor.cli.event_handler.check_claude_installed", return_value=True),
+            patch("github_monitor.cli.event_handler.EventHandler"),
+            patch("github_monitor.cli.event_handler.message_handler", new_callable=AsyncMock) as mock_handler,
+        ):
+            mock_nc.jetstream.return_value = mock_js
+            mock_js.consumer_info = AsyncMock(return_value=mock_consumer_info)
+            mock_js.pull_subscribe = AsyncMock(return_value=mock_psub)
+
+            result = await event_handler_main(mock_args)
+            assert result == 0
+            # Should be called 2 times (once for each message)
+            assert mock_handler.call_count == 2

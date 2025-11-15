@@ -25,7 +25,6 @@ Events published:
 """
 
 import json
-import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,7 +35,6 @@ from nats.aio.client import Client as NATS
 from nats.js.api import DiscardPolicy, RetentionPolicy, StreamConfig
 
 from github_monitor.github_client import get_github_client
-from github_monitor.utils import parse_duration_to_timedelta
 
 
 # Load environment variables from .env file

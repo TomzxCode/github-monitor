@@ -96,16 +96,36 @@ async def event_handler_main(args):
         )
         print(f"Subscribed to stream '{args.stream}' with durable consumer '{args.consumer}'")
         print()
+        if args.max_concurrent > 1:
+            print(f"Parallel processing enabled with max_concurrent={args.max_concurrent}")
+        else:
+            print("Sequential processing enabled (max_concurrent=1)")
         print("Listening for events... (Press Ctrl+C to exit)")
         print()
+
+        # Create semaphore to limit concurrent message processing
+        semaphore = asyncio.Semaphore(args.max_concurrent)
+
+        async def process_with_semaphore(msg):
+            """Process a message with semaphore-based concurrency control."""
+            async with semaphore:
+                await message_handler(msg, handler, args.auto_confirm)
 
         # Continuously fetch and process messages
         while True:
             try:
                 # Fetch messages in batches
                 msgs = await psub.fetch(batch=args.batch_size, timeout=args.fetch_timeout.total_seconds())
-                for msg in msgs:
-                    await message_handler(msg, handler, args.auto_confirm)
+
+                # Process messages in parallel (up to max_concurrent at a time)
+                if args.max_concurrent > 1:
+                    # Parallel processing using asyncio.gather
+                    tasks = [process_with_semaphore(msg) for msg in msgs]
+                    await asyncio.gather(*tasks, return_exceptions=True)
+                else:
+                    # Sequential processing for backward compatibility
+                    for msg in msgs:
+                        await message_handler(msg, handler, args.auto_confirm)
             except TimeoutError:
                 # No messages available, continue polling
                 continue
@@ -126,7 +146,9 @@ async def event_handler_main(args):
 
 
 def event_handler(
-    path: Annotated[Path | None, cyclopts.Parameter(help="Base path containing repository/issue_number directories")] = None,
+    path: Annotated[
+        Path | None, cyclopts.Parameter(help="Base path containing repository/issue_number directories")
+    ] = None,
     templates_dir: Annotated[
         Path | None, cyclopts.Parameter(help="Templates directory containing markdown files for event handlers")
     ] = None,
@@ -138,7 +160,14 @@ def event_handler(
         timedelta | None, cyclopts.Parameter(help="Timeout for fetching messages (format: AdBhCmDs, e.g., 5s, 30s)")
     ] = None,
     ack_wait: Annotated[
-        timedelta | None, cyclopts.Parameter(help="AckWait timeout for message processing (format: AdBhCmDs, e.g., 5m, 300s)")
+        timedelta | None,
+        cyclopts.Parameter(help="AckWait timeout for message processing (format: AdBhCmDs, e.g., 5m, 300s)"),
+    ] = None,
+    max_concurrent: Annotated[
+        int | None,
+        cyclopts.Parameter(
+            help="Maximum number of events to process concurrently. Set to 1 for sequential processing. Default: 5"
+        ),
     ] = None,
     skip_users: Annotated[
         str | None, cyclopts.Parameter(help="Regex pattern to match usernames to skip event handling for")
@@ -185,6 +214,7 @@ def event_handler(
         "batch_size": batch_size,
         "fetch_timeout": fetch_timeout,
         "ack_wait": ack_wait,
+        "max_concurrent": max_concurrent,
         "skip_users": skip_users,
         "repositories": repositories,
         "recreate_consumer": recreate_consumer,
@@ -208,6 +238,7 @@ def event_handler(
     final_stream = merged_config.get("stream", "GITHUB_EVENTS")
     final_consumer = merged_config.get("consumer", "github-event-handler")
     final_batch_size = merged_config.get("batch_size", 10)
+    final_max_concurrent = merged_config.get("max_concurrent", 5)
     final_recreate_consumer = merged_config.get("recreate_consumer", False)
     final_claude_verbose = merged_config.get("claude_verbose", False)
     final_auto_confirm = merged_config.get("auto_confirm", False)
@@ -234,6 +265,7 @@ def event_handler(
     args.batch_size = final_batch_size
     args.fetch_timeout = final_fetch_timeout
     args.ack_wait = final_ack_wait
+    args.max_concurrent = final_max_concurrent
     args.skip_users = merged_config.get("skip_users")
     args.repositories = merged_config.get("repositories")
     args.recreate_consumer = final_recreate_consumer
