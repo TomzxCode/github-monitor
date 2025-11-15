@@ -42,6 +42,9 @@ uv run github-monitor event-handler /path/to/data --templates-dir /path/to/templ
 # Adjust AckWait timeout for very long Claude operations (default is 300 seconds)
 uv run github-monitor event-handler /path/to/data --templates-dir /path/to/templates --ack-wait 600
 
+# Monitor only issues/PRs where you are assigned or requested as reviewer
+uv run github-monitor monitor /path/to/data --repositories owner/repo --assignee-or-reviewer-only
+
 # Dry run (see what would happen without making changes)
 uv run github-monitor monitor /path/to/data --repositories owner/repo --dry-run
 
@@ -150,6 +153,8 @@ The monitor uses GitHub's GraphQL API for efficient data fetching:
 - Uses `GITHUB_TOKEN` environment variable for authentication (loaded from `.env` or environment)
 - Fetches up to 100 items per page with automatic pagination
 - Uses `filterBy: {since: timestamp}` to only fetch recently updated items
+- Supports filtering by assignee/reviewer using GitHub's search API with `assignee:@me` and `review-requested:@me` queries
+- For PRs, fetches both assignee and review-requested results separately and merges them to handle team-based review requests
 - Batches comment fetching at the repository level for efficiency
 - Caches item types (issue vs PR) in `.type` files to reduce API calls
 - All GraphQL queries execute via direct HTTPS requests to `https://api.github.com/graphql`

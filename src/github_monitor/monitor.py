@@ -25,7 +25,6 @@ Events published:
 """
 
 import json
-import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,7 +35,6 @@ from nats.aio.client import Client as NATS
 from nats.js.api import DiscardPolicy, RetentionPolicy, StreamConfig
 
 from github_monitor.github_client import get_github_client
-from github_monitor.utils import parse_duration_to_timedelta
 
 
 # Load environment variables from .env file
@@ -285,13 +283,185 @@ def _fetch_paginated_items(
     return items
 
 
-def get_open_issues(repository: str, updated_since: str | None = None) -> dict[str, dict]:
+def _build_search_issue_query(repository: str, updated_since: str | None = None, cursor: str | None = None) -> str:
+    """Build GraphQL search query for fetching issues where user is assignee."""
+    after_clause = f', after: "{cursor}"' if cursor else ""
+
+    # Build search query
+    query_parts = [f"repo:{repository}", "is:issue", "assignee:@me", "state:open"]
+    if updated_since:
+        # Convert ISO8601 to GitHub search date format (YYYY-MM-DD)
+        # Extract just the date part
+        date_str = updated_since.split("T")[0]
+        query_parts.append(f"updated:>={date_str}")
+
+    search_query = " ".join(query_parts)
+
+    return f"""
+    {{
+      search(query: "{search_query}", type: ISSUE, first: 100{after_clause}) {{
+        pageInfo {{
+          hasNextPage
+          endCursor
+        }}
+        nodes {{
+          ... on Issue {{
+            number
+            title
+            body
+            url
+            state
+            createdAt
+            updatedAt
+            closedAt
+            author {{
+              login
+            }}
+            assignees(first: 10) {{
+              nodes {{
+                login
+              }}
+            }}
+            labels(first: 10) {{
+              nodes {{
+                name
+              }}
+            }}
+          }}
+        }}
+      }}
+    }}
+    """
+
+
+def _build_search_pr_query(repository: str, updated_since: str | None = None, cursor: str | None = None) -> str:
+    """Build GraphQL search query for fetching PRs where user is assignee or reviewer."""
+    after_clause = f', after: "{cursor}"' if cursor else ""
+
+    # Build search query - search for PRs where user is assignee OR has review requested
+    query_parts = [f"repo:{repository}", "is:pr", "state:open"]
+    if updated_since:
+        # Convert ISO8601 to GitHub search date format (YYYY-MM-DD)
+        date_str = updated_since.split("T")[0]
+        query_parts.append(f"updated:>={date_str}")
+
+    # Note: We search for (assignee:@me OR review-requested:@me)
+    # GitHub search doesn't support OR in query string, so we need to do two separate searches
+    # or fetch with review-requested and assignee separately. For now, we'll use review-requested
+    # which also includes assignees in practice. Actually, let's fetch both.
+    # We'll need to make two queries and merge results.
+
+    # For now, let's use a combined approach: get PRs with review-requested
+    query_parts.append("review-requested:@me")
+    search_query = " ".join(query_parts)
+
+    return f"""
+    {{
+      search(query: "{search_query}", type: ISSUE, first: 100{after_clause}) {{
+        pageInfo {{
+          hasNextPage
+          endCursor
+        }}
+        nodes {{
+          ... on PullRequest {{
+            number
+            title
+            body
+            url
+            state
+            createdAt
+            updatedAt
+            closedAt
+            mergedAt
+            author {{
+              login
+            }}
+            assignees(first: 10) {{
+              nodes {{
+                login
+              }}
+            }}
+            labels(first: 10) {{
+              nodes {{
+                name
+              }}
+            }}
+            isDraft
+            mergeable
+            reviewDecision
+          }}
+        }}
+      }}
+    }}
+    """
+
+
+def _build_search_pr_assignee_query(
+    repository: str, updated_since: str | None = None, cursor: str | None = None
+) -> str:
+    """Build GraphQL search query for fetching PRs where user is assignee."""
+    after_clause = f', after: "{cursor}"' if cursor else ""
+
+    # Build search query for PRs where user is assignee
+    query_parts = [f"repo:{repository}", "is:pr", "assignee:@me", "state:open"]
+    if updated_since:
+        date_str = updated_since.split("T")[0]
+        query_parts.append(f"updated:>={date_str}")
+
+    search_query = " ".join(query_parts)
+
+    return f"""
+    {{
+      search(query: "{search_query}", type: ISSUE, first: 100{after_clause}) {{
+        pageInfo {{
+          hasNextPage
+          endCursor
+        }}
+        nodes {{
+          ... on PullRequest {{
+            number
+            title
+            body
+            url
+            state
+            createdAt
+            updatedAt
+            closedAt
+            mergedAt
+            author {{
+              login
+            }}
+            assignees(first: 10) {{
+              nodes {{
+                login
+              }}
+            }}
+            labels(first: 10) {{
+              nodes {{
+                name
+              }}
+            }}
+            isDraft
+            mergeable
+            reviewDecision
+          }}
+        }}
+      }}
+    }}
+    """
+
+
+def get_open_issues(
+    repository: str, updated_since: str | None = None, assignee_or_reviewer_only: bool = False
+) -> dict[str, dict]:
     """
     Get the list of open issues and pull requests from GitHub using GraphQL API.
 
     Args:
         repository: Repository in "owner/repo" format
         updated_since: Optional ISO8601 timestamp to filter issues/PRs updated since this time
+        assignee_or_reviewer_only: If True, only fetch issues/PRs where the authenticated user is an
+            assignee or reviewer
 
     Returns:
         Dictionary mapping issue/PR numbers (as strings) to data dictionaries.
@@ -300,26 +470,56 @@ def get_open_issues(repository: str, updated_since: str | None = None) -> dict[s
     try:
         owner, repo = repository.split("/")
 
-        # Build the filter clause
-        filter_clause = ""
-        if updated_since:
-            filter_clause = f', filterBy: {{since: "{updated_since}"}}'
+        if assignee_or_reviewer_only:
+            # Use search API to filter by assignee/reviewer
+            def issue_search_builder(cursor):
+                return _build_search_issue_query(repository, updated_since, cursor)
 
-        # Create query builders with the specific parameters
-        def issue_query_builder(cursor):
-            return _build_issue_query(owner, repo, filter_clause, cursor)
+            def pr_search_builder(cursor):
+                return _build_search_pr_query(repository, updated_since, cursor)
 
-        def pr_query_builder(cursor):
-            return _build_pr_query(owner, repo, filter_clause, cursor)
+            def pr_assignee_search_builder(cursor):
+                return _build_search_pr_assignee_query(repository, updated_since, cursor)
 
-        # Fetch issues
-        items = _fetch_paginated_items(repository, issue_query_builder, ["repository", "issues"], _parse_issue_node)
+            # Fetch issues where user is assignee
+            items = _fetch_paginated_items(repository, issue_search_builder, ["search"], _parse_issue_node)
 
-        # Fetch pull requests
-        pr_items = _fetch_paginated_items(repository, pr_query_builder, ["repository", "pullRequests"], _parse_pr_node)
+            # Fetch PRs where user has review requested
+            pr_items = _fetch_paginated_items(repository, pr_search_builder, ["search"], _parse_pr_node)
 
-        # Merge PRs into items
-        items.update(pr_items)
+            # Fetch PRs where user is assignee
+            pr_assignee_items = _fetch_paginated_items(
+                repository, pr_assignee_search_builder, ["search"], _parse_pr_node
+            )
+
+            # Merge all PR results (using dict to automatically deduplicate by number)
+            items.update(pr_items)
+            items.update(pr_assignee_items)
+
+        else:
+            # Use repository API (original behavior)
+            # Build the filter clause
+            filter_clause = ""
+            if updated_since:
+                filter_clause = f', filterBy: {{since: "{updated_since}"}}'
+
+            # Create query builders with the specific parameters
+            def issue_query_builder(cursor):
+                return _build_issue_query(owner, repo, filter_clause, cursor)
+
+            def pr_query_builder(cursor):
+                return _build_pr_query(owner, repo, filter_clause, cursor)
+
+            # Fetch issues
+            items = _fetch_paginated_items(repository, issue_query_builder, ["repository", "issues"], _parse_issue_node)
+
+            # Fetch pull requests
+            pr_items = _fetch_paginated_items(
+                repository, pr_query_builder, ["repository", "pullRequests"], _parse_pr_node
+            )
+
+            # Merge PRs into items
+            items.update(pr_items)
 
         return items
     except ValueError as e:
@@ -916,6 +1116,7 @@ async def monitor_repositories(
     repositories: list[str],
     dry_run: bool = False,
     updated_since: str | None = None,
+    assignee_or_reviewer_only: bool = False,
 ) -> int:
     """
     Monitor repositories and publish events for new open issues and PRs.
@@ -926,6 +1127,8 @@ async def monitor_repositories(
         repositories: List of repositories to monitor
         dry_run: If True, don't publish events
         updated_since: Optional ISO8601 timestamp to filter issues/PRs updated since this time
+        assignee_or_reviewer_only: If True, only monitor issues/PRs where the authenticated user is an
+            assignee or reviewer
 
     Returns:
         Number of new issues/PRs discovered
@@ -934,12 +1137,14 @@ async def monitor_repositories(
     current_time = datetime.now(timezone.utc).isoformat()
 
     for repository in repositories:
-        if updated_since:
+        if assignee_or_reviewer_only:
+            print(f"Fetching open issues for {repository} where you are assignee/reviewer...")
+        elif updated_since:
             print(f"Fetching open issues for {repository} updated since {updated_since}...")
         else:
             print(f"Fetching open issues for {repository}...")
 
-        open_items = get_open_issues(repository, updated_since)
+        open_items = get_open_issues(repository, updated_since, assignee_or_reviewer_only)
 
         if not open_items:
             print("  No open issues/PRs found or error fetching")
@@ -980,7 +1185,11 @@ async def monitor_repositories(
 
 
 async def process_active_issues(
-    js, base_path: Path, active_issues: list[tuple[str, str]], dry_run: bool = False
+    js,
+    base_path: Path,
+    active_issues: list[tuple[str, str]],
+    dry_run: bool = False,
+    assignee_or_reviewer_only: bool = False,
 ) -> None:
     """Process all active issues and PRs and publish appropriate events."""
     current_time = datetime.now(timezone.utc).isoformat()
@@ -995,7 +1204,7 @@ async def process_active_issues(
     # Process each repository
     for repository, issue_numbers in issues_by_repo.items():
         print(f"Checking open issues/PRs for {repository}...")
-        open_items = get_open_issues(repository)
+        open_items = get_open_issues(repository, assignee_or_reviewer_only=assignee_or_reviewer_only)
 
         if not open_items and len(issue_numbers) > 0:
             print(f"  Warning: Could not fetch open issues/PRs for {repository}")

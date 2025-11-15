@@ -19,6 +19,7 @@ This tool provides a single command with three subcommands:
 
 - Monitor multiple GitHub repositories for issues and pull requests
 - Track comments on issues and PRs
+- Filter issues/PRs to only those where you are an assignee or reviewer (supports team review requests)
 - Publish events to NATS JetStream with retention policies
 - Durable consumer support for reliable event processing
 - Template-based event handling with Claude CLI integration
@@ -105,6 +106,9 @@ github-monitor monitor /path/to/data --repositories owner/repo --interval 5m
 # Monitor only issues/PRs updated since a specific time
 github-monitor monitor /path/to/data --repositories owner/repo --updated-since 2024-01-01T00:00:00Z
 
+# Monitor only issues/PRs where you are assigned or requested as reviewer
+github-monitor monitor /path/to/data --repositories owner/repo --assignee-or-reviewer-only
+
 # Dry run to see what would happen
 github-monitor monitor /path/to/data --repositories owner/repo --dry-run
 ```
@@ -145,6 +149,7 @@ github-monitor monitor PATH [OPTIONS]
 - `--monitor-issue-comments`: Monitor comments on issues (default: true)
 - `--monitor-pr-comments`: Monitor comments on PRs (default: true)
 - `--active-only`: Only monitor issues/PRs with `.active` flag (default: true)
+- `--assignee-or-reviewer-only`: Only monitor issues/PRs where the authenticated user is an assignee or reviewer (includes team review requests) (default: false)
 - `--interval`: Run monitoring at this interval (format: `5m`, `1h30m`, `2d`). If not specified, runs once
 
 **Examples:**
@@ -157,6 +162,9 @@ github-monitor monitor ./data --repositories owner/repo --no-monitor-issue-comme
 
 # Monitor all issues, not just active ones
 github-monitor monitor ./data --repositories owner/repo --no-active-only
+
+# Monitor only issues/PRs where you are assigned or requested as reviewer
+github-monitor monitor ./data --repositories owner/repo --assignee-or-reviewer-only
 ```
 
 ### github-monitor event-handler

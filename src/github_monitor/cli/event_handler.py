@@ -126,7 +126,9 @@ async def event_handler_main(args):
 
 
 def event_handler(
-    path: Annotated[Path | None, cyclopts.Parameter(help="Base path containing repository/issue_number directories")] = None,
+    path: Annotated[
+        Path | None, cyclopts.Parameter(help="Base path containing repository/issue_number directories")
+    ] = None,
     templates_dir: Annotated[
         Path | None, cyclopts.Parameter(help="Templates directory containing markdown files for event handlers")
     ] = None,
@@ -138,7 +140,8 @@ def event_handler(
         timedelta | None, cyclopts.Parameter(help="Timeout for fetching messages (format: AdBhCmDs, e.g., 5s, 30s)")
     ] = None,
     ack_wait: Annotated[
-        timedelta | None, cyclopts.Parameter(help="AckWait timeout for message processing (format: AdBhCmDs, e.g., 5m, 300s)")
+        timedelta | None,
+        cyclopts.Parameter(help="AckWait timeout for message processing (format: AdBhCmDs, e.g., 5m, 300s)"),
     ] = None,
     skip_users: Annotated[
         str | None, cyclopts.Parameter(help="Regex pattern to match usernames to skip event handling for")

@@ -43,7 +43,9 @@ async def run_monitoring_cycle(args, nc, js):
 
     # Monitor repositories and publish events for new issues/PRs (if enabled)
     if args.monitor_issues:
-        new_count = await monitor_repositories(js, args.path, repositories, args.dry_run, args.updated_since)
+        new_count = await monitor_repositories(
+            js, args.path, repositories, args.dry_run, args.updated_since, args.assignee_or_reviewer_only
+        )
         if new_count > 0:
             print(f"Discovered {new_count} new issue(s)/PR(s)\n")
 
@@ -71,7 +73,7 @@ async def run_monitoring_cycle(args, nc, js):
             print(f"Found {len(active_issues)} active issue(s) and {len(active_prs)} active PR(s)\n")
 
             # Process active issues/PRs and publish events
-            await process_active_issues(js, args.path, all_active_items, args.dry_run)
+            await process_active_issues(js, args.path, all_active_items, args.dry_run, args.assignee_or_reviewer_only)
     elif args.monitor_issue_comments or args.monitor_pr_comments:
         # If comment monitoring is enabled but issue monitoring is not,
         # still need to find active issues/PRs for comment checking
@@ -180,7 +182,9 @@ async def monitor_main(args):
 
 
 def monitor(
-    path: Annotated[Path | None, cyclopts.Parameter(help="Base path containing repository/issue_number directories")] = None,
+    path: Annotated[
+        Path | None, cyclopts.Parameter(help="Base path containing repository/issue_number directories")
+    ] = None,
     repositories: Annotated[
         list[str] | None,
         cyclopts.Parameter(
@@ -206,6 +210,15 @@ def monitor(
         bool | None,
         cyclopts.Parameter(
             help="Only monitor issues/PRs with .active flag. Use --no-active-only to monitor all directories."
+        ),
+    ] = None,
+    assignee_or_reviewer_only: Annotated[
+        bool | None,
+        cyclopts.Parameter(
+            help=(
+                "Only monitor issues/PRs where the authenticated user is an assignee or reviewer "
+                "(includes team review requests)"
+            )
         ),
     ] = None,
     interval: Annotated[
@@ -241,6 +254,7 @@ def monitor(
         "monitor_issue_comments": monitor_issue_comments,
         "monitor_pr_comments": monitor_pr_comments,
         "active_only": active_only,
+        "assignee_or_reviewer_only": assignee_or_reviewer_only,
         "interval": interval,
     }
     merged_config = merge_config_with_defaults(file_config, cli_values)
@@ -258,6 +272,7 @@ def monitor(
     final_monitor_issue_comments = merged_config.get("monitor_issue_comments", True)
     final_monitor_pr_comments = merged_config.get("monitor_pr_comments", True)
     final_active_only = merged_config.get("active_only", True)
+    final_assignee_or_reviewer_only = merged_config.get("assignee_or_reviewer_only", False)
 
     # Handle interval - could be a string from config or timedelta from CLI
     final_interval = merged_config.get("interval")
@@ -284,6 +299,7 @@ def monitor(
     args.monitor_issue_comments = final_monitor_issue_comments
     args.monitor_pr_comments = final_monitor_pr_comments
     args.active_only = final_active_only
+    args.assignee_or_reviewer_only = final_assignee_or_reviewer_only
     args.interval = final_interval
 
     # Check that GitHub token is available
