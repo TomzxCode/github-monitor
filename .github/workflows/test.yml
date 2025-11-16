@@ -27,5 +27,10 @@ jobs:
     - name: Run ruff format check
       run: uv run ruff format --check .
 
-    - name: Run tests
+    - name: Run tests with coverage
       run: uv run pytest -v
+
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
