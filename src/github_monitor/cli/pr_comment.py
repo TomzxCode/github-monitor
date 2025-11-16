@@ -25,7 +25,8 @@ def pr_comment(
         str | None, cyclopts.Parameter(help="Submit a review with event: approve, request_changes, or comment")
     ] = None,
     config: Annotated[
-        Path | None, cyclopts.Parameter(help="Path to YAML configuration file. CLI arguments override config file values.")
+        Path | None,
+        cyclopts.Parameter(help="Path to YAML configuration file. CLI arguments override config file values."),
     ] = None,
 ) -> None:
     """Submit comments on GitHub Pull Requests.
@@ -80,7 +81,9 @@ def pr_comment(
     if not final_repo:
         raise cyclopts.ValidationError("Repository (repo) is required (via --repo or in config file)")
     if not final_pr_number:
-        raise cyclopts.ValidationError("Pull request number (pr_number) is required (via pr_number argument or in config file)")
+        raise cyclopts.ValidationError(
+            "Pull request number (pr_number) is required (via pr_number argument or in config file)"
+        )
 
     try:
         # Authenticate once

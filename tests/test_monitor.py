@@ -3,8 +3,6 @@
 from datetime import datetime, timezone
 from pathlib import Path
 
-import pytest
-
 from github_monitor.monitor import (
     find_active_issues,
     get_last_checked,

@@ -12,6 +12,7 @@ from nats.js.api import ConsumerConfig, DeliverPolicy
 
 from github_monitor.cli.config_loader import load_config, merge_config_with_defaults
 from github_monitor.event_handler import EventHandler, check_claude_installed, message_handler
+from github_monitor.utils import parse_duration_to_timedelta
 
 
 async def event_handler_main(args):
@@ -126,7 +127,9 @@ async def event_handler_main(args):
 
 
 def event_handler(
-    path: Annotated[Path | None, cyclopts.Parameter(help="Base path containing repository/issue_number directories")] = None,
+    path: Annotated[
+        Path | None, cyclopts.Parameter(help="Base path containing repository/issue_number directories")
+    ] = None,
     templates_dir: Annotated[
         Path | None, cyclopts.Parameter(help="Templates directory containing markdown files for event handlers")
     ] = None,
@@ -138,7 +141,8 @@ def event_handler(
         timedelta | None, cyclopts.Parameter(help="Timeout for fetching messages (format: AdBhCmDs, e.g., 5s, 30s)")
     ] = None,
     ack_wait: Annotated[
-        timedelta | None, cyclopts.Parameter(help="AckWait timeout for message processing (format: AdBhCmDs, e.g., 5m, 300s)")
+        timedelta | None,
+        cyclopts.Parameter(help="AckWait timeout for message processing (format: AdBhCmDs, e.g., 5m, 300s)"),
     ] = None,
     skip_users: Annotated[
         str | None, cyclopts.Parameter(help="Regex pattern to match usernames to skip event handling for")
@@ -247,39 +251,3 @@ def event_handler(
     except KeyboardInterrupt:
         print("\nExiting...")
         sys.exit(0)
-
-
-def parse_duration_to_timedelta(duration_str: str) -> timedelta:
-    """Parse duration string like '5m', '1h30m', '2d' to timedelta.
-
-    Args:
-        duration_str: Duration string
-
-    Returns:
-        timedelta object
-    """
-    import re
-
-    if not duration_str:
-        return timedelta(seconds=5)
-
-    total_seconds = 0
-    # Pattern matches: number followed by unit (d, h, m, s)
-    pattern = r"(\d+)([dhms])"
-    matches = re.findall(pattern, duration_str.lower())
-
-    if not matches:
-        return timedelta(seconds=5)
-
-    for value, unit in matches:
-        value = int(value)
-        if unit == "d":
-            total_seconds += value * 86400
-        elif unit == "h":
-            total_seconds += value * 3600
-        elif unit == "m":
-            total_seconds += value * 60
-        elif unit == "s":
-            total_seconds += value
-
-    return timedelta(seconds=total_seconds if total_seconds > 0 else 5)
