@@ -1,14 +1,14 @@
 site_name: GitHub Monitor
 site_description: Python-based system for monitoring GitHub issues/PRs and processing events with Claude
-site_author: github-monitor
-repo_url: https://github.com/vibe-kanban/github-monitor
-repo_name: vibe-kanban/github-monitor
+site_url: https://github.com/tomzxcode/entity-manager
+repo_name: tomzxcode/github-monitor
+repo_url: https://github.com/tomzxcode/github-monitor
 edit_uri: edit/main/docs/
 
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/vibe-kanban/github-monitor
+      link: https://github.com/tomzxcode/github-monitor
 
 nav:
   - Home: index.md
@@ -25,38 +25,34 @@ theme:
   name: material
   font:
     text: Open Sans
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - search.share
+    - content.action.edit
+    - content.action.view
+    - content.code.copy
+    - content.code.annotate
   palette:
     # Palette toggle for light mode
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: indigo
-      accent: indigo
+      primary: white
+      accent: green
       toggle:
         icon: material/weather-night
         name: Switch to dark mode
     # Palette toggle for dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: indigo
-      accent: indigo
+      primary: black
+      accent: green
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
-  features:
-    - navigation.instant
-    - navigation.tracking
-    - navigation.tabs
-    - navigation.sections
-    - navigation.expand
-    - navigation.indexes
-    - navigation.top
-    - search.highlight
-    - search.share
-    - toc.follow
-    - content.action.edit
-    - content.action.view
-    - content.code.copy
-    - content.code.annotate
 
 markdown_extensions:
   - pymdownx.highlight:
