@@ -80,7 +80,7 @@ And CLI values:
 {
     "path": None,  # Not provided via CLI
     "dry_run": True,  # Explicitly set via CLI
-    "repositories": ["owner/repo"]  # Only via CLI
+    "repositories": ["owner/repo"],  # Only via CLI
 }
 ```
 
@@ -91,7 +91,7 @@ The merged result will be:
     "path": "/data/github",  # From config (CLI None ignored)
     "nats_server": "nats://remote:4222",  # From config
     "dry_run": True,  # CLI overrides config
-    "repositories": ["owner/repo"]  # CLI only
+    "repositories": ["owner/repo"],  # CLI only
 }
 ```
 
