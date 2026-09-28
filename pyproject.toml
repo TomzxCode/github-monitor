@@ -5,7 +5,7 @@ description = "Monitor GitHub issues, PRs, and comments through polling with Git
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-	"nats-py>=2.12.0,<3",
+	"nats-py>=2.16.0,<3",
 	"cyclopts>=4.2.4,<5",
 	"python-dotenv>=1.2.3,<2",
 	"structlog>=26.1.0,<27",
